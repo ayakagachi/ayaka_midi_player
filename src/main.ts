@@ -11,6 +11,17 @@ type PianoNote = {
   track: number;
 };
 
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  life: number;
+  maxLife: number;
+  color: string;
+};
+
 const NOTE_MIN = 21;
 const NOTE_MAX = 108;
 const KEYBOARD_HEIGHT = 112;
@@ -32,6 +43,7 @@ const songTitle = document.querySelector<HTMLElement>("#songTitle")!;
 const songMeta = document.querySelector<HTMLElement>("#songMeta")!;
 const trackInfo = document.querySelector<HTMLElement>("#trackInfo")!;
 const emptyState = document.querySelector<HTMLElement>("#emptyState")!;
+const velocityLegend = document.querySelector<HTMLElement>("#velocityLegend")!;
 const dropZone = document.querySelector<HTMLElement>("#dropZone")!;
 const dropMask = document.querySelector<HTMLElement>("#dropMask")!;
 const midiStatus = document.querySelector<HTMLElement>("#midiStatus")!;
@@ -63,7 +75,12 @@ let currentTime = 0;
 let speed = 1;
 let isPlaying = false;
 let midiAccess: MIDIAccess | null = null;
-const activeNotes = new Set<number>();
+let nextVisualNoteIndex = 0;
+let lastVisualTime = 0;
+let lastFrameTime = performance.now();
+const activeNotes = new Map<number, number>();
+const particles: Particle[] = [];
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function activatePage(pageName: string) {
   const pageExists = pageViews.some(page => page.dataset.page === pageName);
@@ -116,13 +133,84 @@ function noteGeometry(midi: number, width: number) {
   return { x: center - whiteWidth * 0.32, width: whiteWidth * 0.64, black: true };
 }
 
+function findNextNoteIndex(time: number) {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (notes[middle].time < time) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function emitParticles(midi: number, rawVelocity: number) {
+  if (reducedMotion.matches || canvas.clientWidth === 0) return;
+  const velocity = Math.min(1, Math.max(.05, rawVelocity));
+  const key = noteGeometry(midi, canvas.clientWidth);
+  const originX = key.x + key.width / 2;
+  const originY = canvas.clientHeight - KEYBOARD_HEIGHT;
+  const count = 3 + Math.round(velocity * 13);
+  const color = midi < 60 ? "85, 167, 255" : "78, 225, 208";
+  for (let index = 0; index < count; index++) {
+    const maxLife = .34 + Math.random() * (.26 + velocity * .34);
+    particles.push({
+      x: originX + (Math.random() - .5) * key.width * velocity,
+      y: originY - 2,
+      vx: (Math.random() - .5) * (24 + velocity * 115),
+      vy: -(35 + Math.random() * (45 + velocity * 105)),
+      size: 1.2 + Math.random() * (1.5 + velocity * 3.2),
+      life: maxLife,
+      maxLife,
+      color,
+    });
+  }
+  if (particles.length > 700) particles.splice(0, particles.length - 700);
+}
+
+function drawParticles(deltaTime: number) {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (let index = particles.length - 1; index >= 0; index--) {
+    const particle = particles[index];
+    particle.life -= deltaTime;
+    if (particle.life <= 0) {
+      particles.splice(index, 1);
+      continue;
+    }
+    particle.x += particle.vx * deltaTime;
+    particle.y += particle.vy * deltaTime;
+    particle.vy += 95 * deltaTime;
+    const progress = particle.life / particle.maxLife;
+    ctx.fillStyle = `rgba(${particle.color}, ${Math.min(1, progress * 1.35)})`;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size * (.55 + progress * .45), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function draw() {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   if (!width || !height) return requestAnimationFrame(draw);
 
+  const frameTime = performance.now();
+  const deltaTime = Math.min(.05, (frameTime - lastFrameTime) / 1000);
+  lastFrameTime = frameTime;
+
   if (isPlaying) {
-    currentTime = Math.min(duration, transport.ticks / TICKS_PER_SECOND);
+    const nextTime = Math.min(duration, transport.ticks / TICKS_PER_SECOND);
+    if (nextTime >= lastVisualTime && nextTime - lastVisualTime < .4) {
+      while (nextVisualNoteIndex < notes.length && notes[nextVisualNoteIndex].time <= nextTime) {
+        const note = notes[nextVisualNoteIndex++];
+        if (note.time >= lastVisualTime) emitParticles(note.midi, note.velocity);
+      }
+    } else {
+      nextVisualNoteIndex = findNextNoteIndex(nextTime);
+    }
+    currentTime = nextTime;
+    lastVisualTime = nextTime;
   }
 
   ctx.clearRect(0, 0, width, height);
@@ -146,31 +234,60 @@ function draw() {
 
   const startWindow = currentTime - .2;
   const endWindow = currentTime + fallHeight / pxPerSecond;
-  const fileActiveNotes = new Set<number>();
+  const fileActiveNotes = new Map<number, number>();
   for (const note of notes) {
     if (note.time + note.duration < startWindow || note.time > endWindow) continue;
-    if (note.time <= currentTime && note.time + note.duration >= currentTime) fileActiveNotes.add(note.midi);
+    const velocity = Math.min(1, Math.max(.05, note.velocity));
+    if (note.time <= currentTime && note.time + note.duration >= currentTime) {
+      fileActiveNotes.set(note.midi, Math.max(fileActiveNotes.get(note.midi) || 0, velocity));
+    }
     const key = noteGeometry(note.midi, width);
     const noteEndY = fallHeight - (note.time - currentTime) * pxPerSecond;
     const noteHeight = Math.max(5, note.duration * pxPerSecond);
-    const xPad = Math.max(1, key.width * .09);
+    const xPad = Math.max(.7, key.width * (.18 - velocity * .12));
     const color = note.midi < 60 ? LEFT_COLOR : RIGHT_COLOR;
-    ctx.shadowBlur = noteEndY > fallHeight - 14 ? 14 : 5;
+    ctx.globalAlpha = .32 + velocity * .68;
+    ctx.shadowBlur = (noteEndY > fallHeight - 14 ? 7 : 2) + velocity * 13;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     roundRect(key.x + xPad, noteEndY - noteHeight, key.width - xPad * 2, noteHeight, Math.min(4, key.width / 4));
     ctx.fill();
   }
+  ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
+
+  const keyVelocities = new Map(activeNotes);
+  fileActiveNotes.forEach((velocity, midi) => {
+    keyVelocities.set(midi, Math.max(keyVelocities.get(midi) || 0, velocity));
+  });
+  keyVelocities.forEach((velocity, midi) => {
+    const key = noteGeometry(midi, width);
+    const center = key.x + key.width / 2;
+    const radius = Math.max(20, key.width * (1.8 + velocity * 3.8));
+    const color = midi < 60 ? "85, 167, 255" : "78, 225, 208";
+    const glow = ctx.createRadialGradient(center, fallHeight, 0, center, fallHeight, radius);
+    glow.addColorStop(0, `rgba(${color}, ${.24 + velocity * .5})`);
+    glow.addColorStop(.35, `rgba(${color}, ${.09 + velocity * .2})`);
+    glow.addColorStop(1, `rgba(${color}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(center - radius, fallHeight - radius, radius * 2, radius);
+  });
+  drawParticles(deltaTime);
 
   ctx.fillStyle = "#dfe8e9";
   ctx.fillRect(0, fallHeight, width, KEYBOARD_HEIGHT);
   for (let midi = NOTE_MIN; midi <= NOTE_MAX; midi++) {
     if (isBlack(midi)) continue;
     const x = starts.get(midi)!;
-    const active = activeNotes.has(midi) || fileActiveNotes.has(midi);
-    ctx.fillStyle = active ? (midi < 60 ? "#75baff" : "#75edde") : "#e9eeee";
+    const velocity = keyVelocities.get(midi) || 0;
+    ctx.fillStyle = "#e9eeee";
     ctx.fillRect(x + .5, fallHeight + 1, whiteWidth - 1, KEYBOARD_HEIGHT - 2);
+    if (velocity > 0) {
+      ctx.globalAlpha = .28 + velocity * .68;
+      ctx.fillStyle = midi < 60 ? "#55a7ff" : "#4ee1d0";
+      ctx.fillRect(x + .5, fallHeight + 1, whiteWidth - 1, KEYBOARD_HEIGHT - 2);
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = "#83939a";
     ctx.strokeRect(x + .5, fallHeight + .5, whiteWidth, KEYBOARD_HEIGHT);
     if (midi % 12 === 0 && whiteWidth > 12) {
@@ -183,10 +300,16 @@ function draw() {
   for (let midi = NOTE_MIN; midi <= NOTE_MAX; midi++) {
     if (!isBlack(midi)) continue;
     const key = noteGeometry(midi, width);
-    const active = activeNotes.has(midi) || fileActiveNotes.has(midi);
-    ctx.fillStyle = active ? (midi < 60 ? "#2f83d5" : "#20aa9b") : "#0b151b";
+    const velocity = keyVelocities.get(midi) || 0;
+    ctx.fillStyle = "#0b151b";
     roundRect(key.x, fallHeight, key.width, KEYBOARD_HEIGHT * .61, 0, 0, 3, 3);
     ctx.fill();
+    if (velocity > 0) {
+      ctx.globalAlpha = .38 + velocity * .62;
+      ctx.fillStyle = midi < 60 ? "#2f83d5" : "#20aa9b";
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   timeline.value = duration ? String(Math.round((currentTime / duration) * 1000)) : "0";
@@ -232,6 +355,8 @@ async function togglePlayback() {
 function startPlayback() {
   if (currentTime >= duration) currentTime = 0;
   isPlaying = true;
+  lastVisualTime = currentTime - .001;
+  nextVisualNoteIndex = findNextNoteIndex(lastVisualTime);
   transport.ticks = currentTime * TICKS_PER_SECOND;
   transport.start();
   playIcon.textContent = "Ⅱ";
@@ -265,6 +390,9 @@ async function loadMidi(file: File) {
     }))).filter(note => note.midi >= NOTE_MIN && note.midi <= NOTE_MAX).sort((a, b) => a.time - b.time);
     duration = notes.reduce((end, note) => Math.max(end, note.time + note.duration), midi.duration || 0);
     currentTime = 0;
+    particles.length = 0;
+    nextVisualNoteIndex = 0;
+    lastVisualTime = 0;
     scheduleSong();
     const musicalTracks = midi.tracks.filter(track => track.notes.length > 0).length;
     const bpm = Math.round(midi.header.tempos[0]?.bpm || 120);
@@ -277,6 +405,7 @@ async function loadMidi(file: File) {
     trackInfo.textContent = `${file.name} · ${formatTime(duration)}`;
     durationLabel.textContent = formatTime(duration);
     emptyState.classList.add("hidden");
+    velocityLegend.hidden = false;
     playButton.disabled = !notes.length;
     timeline.disabled = !notes.length;
     if (!notes.length) songMeta.textContent = "这个文件中没有可播放的钢琴音符";
@@ -293,9 +422,13 @@ function handleMidiMessage(event: MIDIMessageEvent) {
   const command = status & 0xf0;
   if (note < NOTE_MIN || note > NOTE_MAX) return;
   if (command === 0x90 && velocity > 0) {
+    const normalizedVelocity = Math.max(.05, velocity / 127);
     void Tone.start();
-    synth.triggerAttack(midiName(note), Tone.now(), Math.max(.08, velocity / 127));
-    activeNotes.add(note);
+    synth.triggerAttack(midiName(note), Tone.now(), normalizedVelocity);
+    activeNotes.set(note, normalizedVelocity);
+    emptyState.classList.add("hidden");
+    velocityLegend.hidden = false;
+    emitParticles(note, normalizedVelocity);
   } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
     synth.triggerRelease(midiName(note));
     activeNotes.delete(note);
@@ -363,8 +496,12 @@ canvas.addEventListener("pointerdown", async event => {
   await Tone.start();
   canvas.setPointerCapture(event.pointerId);
   pointerNote = midi;
-  synth.triggerAttack(midiName(midi), Tone.now(), .65);
-  activeNotes.add(midi);
+  const velocity = event.pressure > 0 ? Math.max(.25, event.pressure) : .65;
+  synth.triggerAttack(midiName(midi), Tone.now(), velocity);
+  activeNotes.set(midi, velocity);
+  emptyState.classList.add("hidden");
+  velocityLegend.hidden = false;
+  emitParticles(midi, velocity);
 });
 canvas.addEventListener("pointerup", () => {
   if (pointerNote === null) return;
@@ -399,6 +536,9 @@ timeline.addEventListener("input", () => {
   const wasPlaying = isPlaying;
   if (wasPlaying) pausePlayback();
   currentTime = duration * Number(timeline.value) / 1000;
+  particles.length = 0;
+  lastVisualTime = currentTime;
+  nextVisualNoteIndex = findNextNoteIndex(currentTime);
   transport.ticks = currentTime * TICKS_PER_SECOND;
   if (wasPlaying) startPlayback();
 });
