@@ -61,12 +61,19 @@ const librarySongMeta = document.querySelector<HTMLElement>("#librarySongMeta")!
 const pageTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-page-target]"));
 const pageViews = Array.from(document.querySelectorAll<HTMLElement>("[data-page]"));
 
+// 主输出链：混音余量 -> 音量 -> 压缩 -> 限幅，避免和弦叠加削波产生爆音
+const masterBus = new Tone.Gain(0.4);
+const masterVolume = new Tone.Volume(Number(volumeSlider.value));
+const compressor = new Tone.Compressor({ threshold: -18, ratio: 3, attack: 0.003, release: 0.25 });
+const limiter = new Tone.Limiter(-1);
+masterBus.chain(masterVolume, compressor, limiter, Tone.getDestination());
+
 const synth = new Tone.PolySynth(Tone.Synth, {
   oscillator: { type: "triangle8" },
   envelope: { attack: 0.008, decay: 0.75, sustain: 0.24, release: 1.7 },
-  volume: -8,
-}).toDestination();
-synth.maxPolyphony = 64;
+});
+synth.maxPolyphony = 48;
+synth.connect(masterBus);
 
 const instrumentPresets = {
   piano: {
@@ -95,13 +102,24 @@ type InstrumentId = keyof typeof instrumentPresets;
 
 function applyInstrument(instrument: InstrumentId) {
   const preset = instrumentPresets[instrument];
-  synth.releaseAll();
   activeNotes.clear();
-  synth.set({
-    oscillator: { type: preset.oscillator },
-    envelope: preset.envelope,
-  });
-  settingsInstrumentName.textContent = `${preset.label} · Tone.js 64 复音`;
+  const fade = 0.045; // 切换音色先短淡出，避免波形突变产生“啪”声
+  const now = Tone.now();
+  synth.volume.cancelScheduledValues(now);
+  synth.volume.setValueAtTime(0, now);
+  synth.volume.linearRampTo(-60, fade, now);
+  window.setTimeout(() => {
+    synth.releaseAll();
+    synth.set({
+      oscillator: { type: preset.oscillator },
+      envelope: preset.envelope,
+    });
+    const t = Tone.now();
+    synth.volume.cancelScheduledValues(t);
+    synth.volume.setValueAtTime(-60, t);
+    synth.volume.linearRampTo(0, fade, t);
+  }, (fade + 0.01) * 1000);
+  settingsInstrumentName.textContent = `${preset.label} · Tone.js 48 复音`;
 }
 
 const transport = Tone.getTransport();
@@ -570,7 +588,7 @@ speedSelect.addEventListener("change", () => {
   transport.ticks = currentTime * TICKS_PER_SECOND;
   if (wasPlaying) startPlayback();
 });
-volumeSlider.addEventListener("input", () => { synth.volume.value = Number(volumeSlider.value); });
+volumeSlider.addEventListener("input", () => { masterVolume.volume.value = Number(volumeSlider.value); });
 instrumentSelect.addEventListener("change", () => {
   applyInstrument(instrumentSelect.value as InstrumentId);
 });
