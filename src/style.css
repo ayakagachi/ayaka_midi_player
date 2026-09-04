@@ -46,12 +46,7 @@ button, label, input[type="range"], select { -webkit-tap-highlight-color: transp
 .statusbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .brand { display: inline-flex; align-items: center; gap: 11px; color: var(--ink); text-decoration: none; font-family: "IBM Plex Sans SC", sans-serif; font-weight: 600; letter-spacing: .08em; }
-.brand-mark { width: 26px; height: 24px; display: flex; align-items: end; gap: 3px; }
-.brand-mark i { display: block; width: 4px; border-radius: 4px; background: var(--cyan); }
-.brand-mark i:nth-child(1) { height: 9px; }
-.brand-mark i:nth-child(2) { height: 18px; }
-.brand-mark i:nth-child(3) { height: 13px; }
-.brand-mark i:nth-child(4) { height: 22px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--line); }
 
 .page-tabs { height: 44px; display: flex; align-items: stretch; gap: 30px; padding: 0 clamp(18px, 4vw, 54px); overflow-x: auto; scrollbar-width: none; }
 .page-tabs::-webkit-scrollbar { display: none; }
