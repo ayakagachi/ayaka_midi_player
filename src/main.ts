@@ -604,6 +604,20 @@ canvas.addEventListener("pointerdown", async event => {
   velocityLegend.hidden = false;
   emitParticles(midi, velocity);
 });
+canvas.addEventListener("pointermove", event => {
+  if (pointerNote === null) return;
+  const midi = pointerToMidi(event);
+  if (midi === pointerNote) return;
+  synth.triggerRelease(midiName(pointerNote));
+  activeNotes.delete(pointerNote);
+  pointerNote = midi;
+  if (midi !== null) {
+    const velocity = event.pressure > 0 ? Math.max(.25, event.pressure) : .65;
+    synth.triggerAttack(midiName(midi), Tone.now(), velocity);
+    activeNotes.set(midi, velocity);
+    emitParticles(midi, velocity);
+  }
+});
 canvas.addEventListener("pointerup", () => {
   if (pointerNote === null) return;
   synth.triggerRelease(midiName(pointerNote));
