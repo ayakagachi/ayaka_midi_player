@@ -1,5 +1,7 @@
 import { Midi } from "@tonejs/midi";
 import * as Tone from "tone";
+import { loadConfig, onConfigChange, updateConfig } from "./config";
+import * as library from "./libraryStore";
 import "./style.css";
 
 type PianoNote = {
@@ -61,6 +63,10 @@ const libraryEmpty = document.querySelector<HTMLElement>("#libraryEmpty")!;
 const libraryCurrent = document.querySelector<HTMLElement>("#libraryCurrent")!;
 const librarySongTitle = document.querySelector<HTMLElement>("#librarySongTitle")!;
 const librarySongMeta = document.querySelector<HTMLElement>("#librarySongMeta")!;
+const libraryList = document.querySelector<HTMLElement>("#libraryList")!;
+const toggleBackgroundPlayback = document.querySelector<HTMLButtonElement>("#toggleBackgroundPlayback")!;
+const toggleSaveToLibrary = document.querySelector<HTMLButtonElement>("#toggleSaveToLibrary")!;
+const libraryDirStatus = document.querySelector<HTMLElement>("#libraryDirStatus")!;
 const pageTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-page-target]"));
 const pageViews = Array.from(document.querySelectorAll<HTMLElement>("[data-page]"));
 
@@ -135,6 +141,7 @@ let currentTime = 0;
 let speed = 1;
 let transpose = 0;
 let isPlaying = false;
+let config = loadConfig();
 let midiAccess: MIDIAccess | null = null;
 let nextVisualNoteIndex = 0;
 let lastVisualTime = 0;
@@ -440,6 +447,86 @@ function pausePlayback() {
   playButton.setAttribute("aria-label", "播放");
 }
 
+let pausedByHidden = false;
+document.addEventListener("visibilitychange", () => {
+  if (config.backgroundPlayback) return;
+  if (document.hidden && isPlaying) {
+    pausePlayback();
+    pausedByHidden = true;
+  } else if (!document.hidden && pausedByHidden) {
+    pausedByHidden = false;
+    startPlayback();
+  }
+});
+
+onConfigChange(next => {
+  config = next;
+  if (!config.backgroundPlayback && document.hidden && isPlaying) {
+    pausePlayback();
+    pausedByHidden = true;
+  }
+  refreshSettings();
+  void refreshLibrary();
+});
+
+async function refreshLibrary() {
+  const entries = config.saveToLibrary && await library.restore() ? await library.list() : [];
+  libraryList.replaceChildren(...entries.map(entry => {
+    const item = document.createElement("div");
+    item.className = "library-item";
+    const name = document.createElement("span");
+    name.textContent = entry.name.replace(/\.(mid|midi)$/i, "");
+    const actions = document.createElement("div");
+    actions.className = "library-actions";
+    const openButton = document.createElement("button");
+    openButton.className = "quiet-button";
+    openButton.type = "button";
+    openButton.textContent = "打开";
+    openButton.addEventListener("click", async () => {
+      try {
+        void loadMidi(await library.open(entry.name));
+      } catch {
+        trackInfo.textContent = "曲库文件不可用";
+      }
+    });
+    const removeButton = document.createElement("button");
+    removeButton.className = "quiet-button";
+    removeButton.type = "button";
+    removeButton.textContent = "移出";
+    removeButton.addEventListener("click", async () => {
+      try {
+        await library.remove(entry.name);
+        void refreshLibrary();
+      } catch {
+        trackInfo.textContent = "曲库文件夹不可用";
+      }
+    });
+    actions.append(openButton, removeButton);
+    item.append(name, actions);
+    return item;
+  }));
+  libraryList.hidden = !entries.length;
+  if (!notes.length) libraryEmpty.hidden = entries.length > 0;
+}
+
+function refreshSettings() {
+  toggleBackgroundPlayback.setAttribute("aria-checked", String(config.backgroundPlayback));
+  if (!library.isSupported()) {
+    toggleSaveToLibrary.disabled = true;
+    toggleSaveToLibrary.setAttribute("aria-checked", "false");
+    libraryDirStatus.textContent = "当前浏览器不支持（需 Chrome/Edge）";
+    return;
+  }
+  toggleSaveToLibrary.disabled = false;
+  toggleSaveToLibrary.setAttribute("aria-checked", String(config.saveToLibrary));
+  if (!config.saveToLibrary) {
+    libraryDirStatus.textContent = "未选择文件夹";
+  } else {
+    const name = library.directoryName();
+    libraryDirStatus.textContent = name ? `曲库文件夹：${name}` : "未选择文件夹";
+  }
+}
+
 function setTranspose(next: number) {
   transpose = Math.max(-6, Math.min(6, next));
   transposeValue.textContent = transpose > 0 ? `+${transpose}` : String(transpose);
@@ -503,6 +590,18 @@ async function loadMidi(file: File) {
     librarySongMeta.textContent = metaTags.map(tag => tag.text).join(" · ");
     libraryEmpty.hidden = true;
     libraryCurrent.hidden = false;
+    if (config.saveToLibrary && library.isSupported()) {
+      void library.ensureReady().then(async ok => {
+        if (!ok) return;
+        try {
+          await library.save(file);
+          refreshSettings();
+          void refreshLibrary();
+        } catch {
+          trackInfo.textContent = "保存到曲库失败";
+        }
+      });
+    }
     trackInfo.textContent = `${file.name} · ${formatTime(duration)}`;
     durationLabel.textContent = formatTime(duration);
     emptyState.classList.add("hidden");
@@ -652,6 +751,18 @@ transposeUpButton.addEventListener("click", () => setTranspose(transpose + 1));
 instrumentSelect.addEventListener("change", () => {
   applyInstrument(instrumentSelect.value as InstrumentId);
 });
+toggleBackgroundPlayback.addEventListener("click", () => {
+  updateConfig({ backgroundPlayback: !config.backgroundPlayback });
+});
+toggleSaveToLibrary.addEventListener("click", async () => {
+  if (config.saveToLibrary) {
+    updateConfig({ saveToLibrary: false });
+    return;
+  }
+  if (!library.directoryName() && !await library.pickDirectory()) return;
+  updateConfig({ saveToLibrary: true });
+  void refreshLibrary();
+});
 timeline.addEventListener("input", () => {
   const wasPlaying = isPlaying;
   if (wasPlaying) pausePlayback();
@@ -677,4 +788,9 @@ dropZone.addEventListener("drop", event => {
 new ResizeObserver(resizeCanvas).observe(canvas);
 resizeCanvas();
 activatePage(window.location.hash.slice(1));
+refreshSettings();
+void library.restore().then(() => {
+  refreshSettings();
+  void refreshLibrary();
+});
 requestAnimationFrame(draw);

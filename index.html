@@ -110,6 +110,7 @@
           </div>
           <button class="file-button" id="libraryOpenButton" type="button">打开演奏</button>
         </div>
+        <div class="library-list" id="libraryList" hidden></div>
       </section>
 
       <section class="feature-page page-view" id="page-practice" data-page="practice" role="tabpanel" aria-label="练习" hidden>
@@ -143,7 +144,15 @@
           </div>
           <div class="settings-row">
             <div><strong>后台播放</strong><span>切换到其他窗口时继续播放当前曲目。</span></div>
-            <span class="setting-value enabled">已开启</span>
+            <button class="toggle" id="toggleBackgroundPlayback" type="button" role="switch" aria-checked="true" aria-label="后台播放"></button>
+          </div>
+          <div class="settings-row">
+            <div>
+              <strong>导入时存入曲库</strong>
+              <span>导入 MIDI 时保存到你选择的文件夹，曲库中随时打开。</span>
+              <span class="setting-value" id="libraryDirStatus">未选择文件夹</span>
+            </div>
+            <button class="toggle" id="toggleSaveToLibrary" type="button" role="switch" aria-checked="false" aria-label="导入时存入曲库"></button>
           </div>
         </div>
       </section>
