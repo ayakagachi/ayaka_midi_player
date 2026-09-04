@@ -38,6 +38,9 @@ const timeline = document.querySelector<HTMLInputElement>("#timeline")!;
 const currentTimeLabel = document.querySelector<HTMLElement>("#currentTime")!;
 const durationLabel = document.querySelector<HTMLElement>("#duration")!;
 const speedSelect = document.querySelector<HTMLSelectElement>("#speedSelect")!;
+const transposeDownButton = document.querySelector<HTMLButtonElement>("#transposeDown")!;
+const transposeUpButton = document.querySelector<HTMLButtonElement>("#transposeUp")!;
+const transposeValue = document.querySelector<HTMLElement>("#transposeValue")!;
 const volumeSlider = document.querySelector<HTMLInputElement>("#volumeSlider")!;
 const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrumentSelect")!;
 const songTitle = document.querySelector<HTMLElement>("#songTitle")!;
@@ -130,6 +133,7 @@ let notes: PianoNote[] = [];
 let duration = 0;
 let currentTime = 0;
 let speed = 1;
+let transpose = 0;
 let isPlaying = false;
 let midiAccess: MIDIAccess | null = null;
 let nextVisualNoteIndex = 0;
@@ -261,7 +265,10 @@ function draw() {
     if (nextTime >= lastVisualTime && nextTime - lastVisualTime < .4) {
       while (nextVisualNoteIndex < notes.length && notes[nextVisualNoteIndex].time <= nextTime) {
         const note = notes[nextVisualNoteIndex++];
-        if (note.time >= lastVisualTime) emitParticles(note.midi, note.velocity);
+        const effective = note.midi + transpose;
+        if (note.time >= lastVisualTime && effective >= NOTE_MIN && effective <= NOTE_MAX) {
+          emitParticles(effective, note.velocity);
+        }
       }
     } else {
       nextVisualNoteIndex = findNextNoteIndex(nextTime);
@@ -294,11 +301,13 @@ function draw() {
   const fileActiveNotes = new Map<number, number>();
   for (const note of notes) {
     if (note.time + note.duration < startWindow || note.time > endWindow) continue;
+    const effective = note.midi + transpose;
+    if (effective < NOTE_MIN || effective > NOTE_MAX) continue;
     const velocity = Math.min(1, Math.max(.05, note.velocity));
     if (note.time <= currentTime && note.time + note.duration >= currentTime) {
-      fileActiveNotes.set(note.midi, Math.max(fileActiveNotes.get(note.midi) || 0, velocity));
+      fileActiveNotes.set(effective, Math.max(fileActiveNotes.get(effective) || 0, velocity));
     }
-    const key = noteGeometry(note.midi, width);
+    const key = noteGeometry(effective, width);
     const noteEndY = fallHeight - (note.time - currentTime) * pxPerSecond;
     const noteHeight = Math.max(5, note.duration * pxPerSecond);
     const xPad = Math.max(.7, key.width * (.18 - velocity * .12));
@@ -384,10 +393,12 @@ function scheduleSong() {
   transport.cancel();
   transport.bpm.value = BASE_BPM * speed;
   for (const note of notes) {
+    const effective = note.midi + transpose;
+    if (effective < NOTE_MIN || effective > NOTE_MAX) continue;
     const startTicks = Math.round(note.time * TICKS_PER_SECOND);
     const durationTicks = Math.max(1, Math.round(note.duration * TICKS_PER_SECOND));
     transport.schedule(time => {
-      synth.triggerAttackRelease(note.name, `${durationTicks}i`, time, Math.max(.08, note.velocity));
+      synth.triggerAttackRelease(midiName(effective), `${durationTicks}i`, time, Math.max(.08, note.velocity));
     }, `${startTicks}i`);
   }
   const endTicks = Math.max(1, Math.ceil(duration * TICKS_PER_SECOND));
@@ -429,6 +440,28 @@ function pausePlayback() {
   playButton.setAttribute("aria-label", "播放");
 }
 
+function setTranspose(next: number) {
+  transpose = Math.max(-6, Math.min(6, next));
+  transposeValue.textContent = transpose > 0 ? `+${transpose}` : String(transpose);
+  transposeDownButton.disabled = transpose <= -6;
+  transposeUpButton.disabled = transpose >= 6;
+  updateTransposeTag();
+  if (!notes.length) return;
+  const wasPlaying = isPlaying;
+  if (wasPlaying) pausePlayback();
+  scheduleSong();
+  transport.ticks = currentTime * TICKS_PER_SECOND;
+  if (wasPlaying) startPlayback();
+}
+
+const transposeTag = document.createElement("span");
+transposeTag.className = "meta-tag meta-tag-amber";
+function updateTransposeTag() {
+  transposeTag.textContent = transpose > 0 ? `+${transpose} 调` : `${transpose} 调`;
+  if (transpose !== 0 && notes.length && !transposeTag.isConnected) songMeta.append(transposeTag);
+  if (transpose === 0 && transposeTag.isConnected) transposeTag.remove();
+}
+
 async function loadMidi(file: File) {
   if (!/\.(mid|midi)$/i.test(file.name)) {
     songMeta.textContent = "请选择 .mid 或 .midi 文件";
@@ -465,6 +498,7 @@ async function loadMidi(file: File) {
       tag.textContent = text;
       return tag;
     }));
+    updateTransposeTag();
     librarySongTitle.textContent = songTitle.textContent;
     librarySongMeta.textContent = metaTags.map(tag => tag.text).join(" · ");
     libraryEmpty.hidden = true;
@@ -487,18 +521,19 @@ function handleMidiMessage(event: MIDIMessageEvent) {
   if (!event.data) return;
   const [status = 0, note = 0, velocity = 0] = event.data;
   const command = status & 0xf0;
-  if (note < NOTE_MIN || note > NOTE_MAX) return;
+  const effective = note + transpose;
+  if (effective < NOTE_MIN || effective > NOTE_MAX) return;
   if (command === 0x90 && velocity > 0) {
     const normalizedVelocity = Math.max(.05, velocity / 127);
     void Tone.start();
-    synth.triggerAttack(midiName(note), Tone.now(), normalizedVelocity);
-    activeNotes.set(note, normalizedVelocity);
+    synth.triggerAttack(midiName(effective), Tone.now(), normalizedVelocity);
+    activeNotes.set(effective, normalizedVelocity);
     emptyState.classList.add("hidden");
     velocityLegend.hidden = false;
-    emitParticles(note, normalizedVelocity);
+    emitParticles(effective, normalizedVelocity);
   } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
-    synth.triggerRelease(midiName(note));
-    activeNotes.delete(note);
+    synth.triggerRelease(midiName(effective));
+    activeNotes.delete(effective);
   }
 }
 
@@ -558,8 +593,10 @@ function pointerToMidi(event: PointerEvent) {
 
 let pointerNote: number | null = null;
 canvas.addEventListener("pointerdown", async event => {
-  const midi = pointerToMidi(event);
-  if (midi === null) return;
+  const pressed = pointerToMidi(event);
+  if (pressed === null) return;
+  const midi = pressed + transpose;
+  if (midi < NOTE_MIN || midi > NOTE_MAX) return;
   await Tone.start();
   canvas.setPointerCapture(event.pointerId);
   pointerNote = midi;
@@ -599,6 +636,8 @@ speedSelect.addEventListener("change", () => {
   if (wasPlaying) startPlayback();
 });
 volumeSlider.addEventListener("input", () => { masterVolume.volume.value = Number(volumeSlider.value); });
+transposeDownButton.addEventListener("click", () => setTranspose(transpose - 1));
+transposeUpButton.addEventListener("click", () => setTranspose(transpose + 1));
 instrumentSelect.addEventListener("change", () => {
   applyInstrument(instrumentSelect.value as InstrumentId);
 });
