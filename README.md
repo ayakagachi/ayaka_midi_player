@@ -1,4 +1,4 @@
-# 澄音 MIDI Piano
+# Sumine 澄音
 
 一个浏览器端 MIDI 钢琴原型：导入 MIDI 文件后播放声音并显示瀑布流，也可以连接 USB MIDI 键盘实时演奏。
 
