@@ -454,9 +454,19 @@ async function loadMidi(file: File) {
     const musicalTracks = midi.tracks.filter(track => track.notes.length > 0).length;
     const bpm = Math.round(midi.header.tempos[0]?.bpm || 120);
     songTitle.textContent = midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
-    songMeta.textContent = `${musicalTracks} 条音轨 · ${notes.length.toLocaleString()} 个音符 · ${bpm} BPM`;
+    const metaTags = [
+      { text: `${musicalTracks} 条音轨`, tone: "blue" },
+      { text: `${notes.length.toLocaleString()} 个音符`, tone: "cyan" },
+      { text: `${bpm} BPM`, tone: "amber" },
+    ];
+    songMeta.replaceChildren(...metaTags.map(({ text, tone }) => {
+      const tag = document.createElement("span");
+      tag.className = `meta-tag meta-tag-${tone}`;
+      tag.textContent = text;
+      return tag;
+    }));
     librarySongTitle.textContent = songTitle.textContent;
-    librarySongMeta.textContent = songMeta.textContent;
+    librarySongMeta.textContent = metaTags.map(tag => tag.text).join(" · ");
     libraryEmpty.hidden = true;
     libraryCurrent.hidden = false;
     trackInfo.textContent = `${file.name} · ${formatTime(duration)}`;

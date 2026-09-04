@@ -102,6 +102,11 @@ button, label, input[type="range"], select { -webkit-tap-highlight-color: transp
 h1 { margin: 0; color: #f2f8f8; font-family: "IBM Plex Sans SC", sans-serif; font-size: clamp(26px, 3.5vw, 44px); line-height: 1.1; font-weight: 500; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .song-head h1 { font-size: clamp(18px, 2vw, 20px); letter-spacing: -.01em; }
 .song-meta { margin: 9px 0 0; overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.song-meta:has(.meta-tag) { display: flex; flex-wrap: wrap; gap: 6px; }
+.meta-tag { display: inline-flex; align-items: center; padding: 3px 10px; border: 1px solid; border-radius: 999px; font-size: 12px; line-height: 1.4; }
+.meta-tag-blue { color: var(--blue); border-color: rgba(85, 167, 255, .35); background: rgba(85, 167, 255, .1); }
+.meta-tag-cyan { color: var(--cyan); border-color: rgba(78, 225, 208, .35); background: rgba(78, 225, 208, .1); }
+.meta-tag-amber { color: var(--amber); border-color: rgba(255, 189, 102, .35); background: rgba(255, 189, 102, .1); }
 .file-button { margin-left: auto; flex: 0 0 auto; padding: 11px 18px; color: #06201d; border-color: var(--cyan); background: var(--cyan); font-weight: 600; }
 .file-button:hover { background: #74eadc; }
 .studio-actions { flex: 0 0 auto; display: flex; align-items: end; gap: 10px; margin-left: auto; }
