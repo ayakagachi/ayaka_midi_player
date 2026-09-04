@@ -39,6 +39,7 @@ const currentTimeLabel = document.querySelector<HTMLElement>("#currentTime")!;
 const durationLabel = document.querySelector<HTMLElement>("#duration")!;
 const speedSelect = document.querySelector<HTMLSelectElement>("#speedSelect")!;
 const volumeSlider = document.querySelector<HTMLInputElement>("#volumeSlider")!;
+const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrumentSelect")!;
 const songTitle = document.querySelector<HTMLElement>("#songTitle")!;
 const songMeta = document.querySelector<HTMLElement>("#songMeta")!;
 const trackInfo = document.querySelector<HTMLElement>("#trackInfo")!;
@@ -50,6 +51,7 @@ const midiStatus = document.querySelector<HTMLElement>("#midiStatus")!;
 const connectMidiButton = document.querySelector<HTMLButtonElement>("#connectMidiButton")!;
 const settingsMidiButton = document.querySelector<HTMLButtonElement>("#settingsMidiButton")!;
 const settingsMidiStatus = document.querySelector<HTMLElement>("#settingsMidiStatus")!;
+const settingsInstrumentName = document.querySelector<HTMLElement>("#settingsInstrumentName")!;
 const libraryImportButton = document.querySelector<HTMLButtonElement>("#libraryImportButton")!;
 const libraryOpenButton = document.querySelector<HTMLButtonElement>("#libraryOpenButton")!;
 const libraryEmpty = document.querySelector<HTMLElement>("#libraryEmpty")!;
@@ -65,6 +67,43 @@ const synth = new Tone.PolySynth(Tone.Synth, {
   volume: -8,
 }).toDestination();
 synth.maxPolyphony = 64;
+
+const instrumentPresets = {
+  piano: {
+    label: "原声钢琴",
+    oscillator: "triangle8",
+    envelope: { attack: 0.008, decay: 0.75, sustain: 0.24, release: 1.7 },
+  },
+  bright: {
+    label: "明亮钢琴",
+    oscillator: "triangle4",
+    envelope: { attack: 0.004, decay: 0.48, sustain: 0.16, release: 1.05 },
+  },
+  electric: {
+    label: "电钢琴",
+    oscillator: "sine8",
+    envelope: { attack: 0.012, decay: 0.9, sustain: 0.34, release: 2.15 },
+  },
+  organ: {
+    label: "管风琴",
+    oscillator: "sine4",
+    envelope: { attack: 0.025, decay: 0.16, sustain: 0.88, release: 0.42 },
+  },
+} as const;
+
+type InstrumentId = keyof typeof instrumentPresets;
+
+function applyInstrument(instrument: InstrumentId) {
+  const preset = instrumentPresets[instrument];
+  synth.releaseAll();
+  activeNotes.clear();
+  synth.set({
+    oscillator: { type: preset.oscillator },
+    envelope: preset.envelope,
+  });
+  settingsInstrumentName.textContent = `${preset.label} · Tone.js 64 复音`;
+}
+
 const transport = Tone.getTransport();
 transport.bpm.value = BASE_BPM;
 const TICKS_PER_SECOND = transport.PPQ * 2;
@@ -532,6 +571,9 @@ speedSelect.addEventListener("change", () => {
   if (wasPlaying) startPlayback();
 });
 volumeSlider.addEventListener("input", () => { synth.volume.value = Number(volumeSlider.value); });
+instrumentSelect.addEventListener("change", () => {
+  applyInstrument(instrumentSelect.value as InstrumentId);
+});
 timeline.addEventListener("input", () => {
   const wasPlaying = isPlaying;
   if (wasPlaying) pausePlayback();

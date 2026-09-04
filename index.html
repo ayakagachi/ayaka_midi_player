@@ -32,7 +32,17 @@
             <h1 id="songTitle">把 MIDI 放进来，听见它</h1>
             <p class="song-meta" id="songMeta">支持 .mid 和 .midi 文件，也可以直接连接电子琴</p>
           </div>
-          <label class="file-button" for="fileInput">导入 MIDI</label>
+          <div class="studio-actions">
+            <label class="instrument-control" for="instrumentSelect">乐器
+              <select id="instrumentSelect">
+                <option value="piano" selected>原声钢琴</option>
+                <option value="bright">明亮钢琴</option>
+                <option value="electric">电钢琴</option>
+                <option value="organ">管风琴</option>
+              </select>
+            </label>
+            <label class="file-button" for="fileInput">导入 MIDI</label>
+          </div>
           <input id="fileInput" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden />
         </div>
 
@@ -122,7 +132,7 @@
             <button class="quiet-button" id="settingsMidiButton" type="button">连接设备</button>
           </div>
           <div class="settings-row">
-            <div><strong>声音引擎</strong><span>Tone.js 合成钢琴 · 64 复音</span></div>
+            <div><strong>声音引擎</strong><span id="settingsInstrumentName">原声钢琴 · Tone.js 64 复音</span></div>
             <span class="setting-value">浏览器本地</span>
           </div>
           <div class="settings-row">
