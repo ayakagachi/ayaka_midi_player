@@ -97,7 +97,7 @@ button, label, input[type="range"], select { -webkit-tap-highlight-color: transp
 .setting-value { color: #88a0aa; font-size: 12px; }
 .setting-value.enabled { color: var(--cyan); }
 .song-head { display: flex; align-items: end; gap: 24px; min-width: 0; }
-.song-head > div { flex: 1 1 auto; min-width: 0; }
+.song-summary { flex: 1 1 auto; min-width: 0; }
 .song-kicker { margin: 0 0 7px; color: var(--cyan); font-size: 12px; }
 h1 { margin: 0; color: #f2f8f8; font-family: "IBM Plex Sans SC", sans-serif; font-size: clamp(26px, 3.5vw, 44px); line-height: 1.1; font-weight: 500; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .song-head h1 { font-size: clamp(18px, 2vw, 20px); letter-spacing: -.01em; }
@@ -164,7 +164,7 @@ button:focus-visible, label:focus-visible, input:focus-visible, select:focus-vis
 
 @media (max-width: 520px) {
   .song-head { flex-wrap: wrap; }
-  .song-head > div { flex-basis: 100%; }
+  .song-summary { flex-basis: 100%; }
   .studio-actions { width: 100%; justify-content: flex-end; }
   .feature-surface, .settings-row { align-items: flex-start; flex-direction: column; }
   .feature-surface .file-button { margin-left: 0; }
