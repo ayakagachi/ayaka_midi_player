@@ -484,7 +484,7 @@ async function refreshLibrary() {
     openButton.textContent = "打开";
     openButton.addEventListener("click", async () => {
       try {
-        void loadMidi(await library.open(entry.name));
+        void loadMidi(await library.open(entry.name), name.textContent ?? undefined);
       } catch {
         trackInfo.textContent = "曲库文件不可用";
       }
@@ -549,7 +549,7 @@ function updateTransposeTag() {
   if (transpose === 0 && transposeTag.isConnected) transposeTag.remove();
 }
 
-async function loadMidi(file: File) {
+async function loadMidi(file: File, displayName?: string) {
   if (!/\.(mid|midi)$/i.test(file.name)) {
     songMeta.textContent = "请选择 .mid 或 .midi 文件";
     return;
@@ -573,7 +573,7 @@ async function loadMidi(file: File) {
     scheduleSong();
     const musicalTracks = midi.tracks.filter(track => track.notes.length > 0).length;
     const bpm = Math.round(midi.header.tempos[0]?.bpm || 120);
-    songTitle.textContent = midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
+    songTitle.textContent = displayName || midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
     const metaTags = [
       { text: `${musicalTracks} 条音轨`, tone: "blue" },
       { text: `${notes.length.toLocaleString()} 个音符`, tone: "cyan" },
