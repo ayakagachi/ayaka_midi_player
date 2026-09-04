@@ -114,13 +114,35 @@ async function uniqueFileName(dir: FileSystemDirectoryHandle, name: string): Pro
   }
 }
 
-export async function save(file: File): Promise<void> {
+/** 目录内是否已有内容完全相同的 MIDI 文件 */
+async function hasDuplicate(file: File): Promise<boolean> {
+  if (!dirHandle) return false;
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  for await (const [name, handle] of dirHandle as unknown as AsyncIterable<[string, FileSystemHandle]>) {
+    if (handle.kind !== "file" || !/\.(mid|midi)$/i.test(name)) continue;
+    const existing = await (handle as FileSystemFileHandle).getFile();
+    if (existing.size !== file.size) continue;
+    const existingBytes = new Uint8Array(await existing.arrayBuffer());
+    let same = true;
+    for (let index = 0; index < bytes.length; index++) {
+      if (bytes[index] !== existingBytes[index]) { same = false; break; }
+    }
+    if (same) return true;
+  }
+  return false;
+}
+
+/** 写入曲库。返回是否真正写入；已有相同内容的文件时跳过并返回 false。 */
+export async function save(file: File): Promise<boolean> {
   if (!dirHandle || !await verifyPermission(dirHandle, false)) throw new Error("曲库文件夹不可用");
+  if (await hasDuplicate(file)) return false;
   const name = await uniqueFileName(dirHandle, midiFileName(file.name));
   const handle = await dirHandle.getFileHandle(name, { create: true });
   const writable = await handle.createWritable();
   await writable.write(file);
   await writable.close();
+  return true;
 }
 
 export async function list(): Promise<LibraryEntry[]> {

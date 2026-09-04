@@ -594,9 +594,10 @@ async function loadMidi(file: File) {
       void library.ensureReady().then(async ok => {
         if (!ok) return;
         try {
-          await library.save(file);
+          const written = await library.save(file);
           refreshSettings();
           void refreshLibrary();
+          if (!written) trackInfo.textContent = "曲库中已有相同的曲目";
         } catch {
           trackInfo.textContent = "保存到曲库失败";
         }
