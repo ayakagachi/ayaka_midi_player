@@ -521,19 +521,18 @@ function handleMidiMessage(event: MIDIMessageEvent) {
   if (!event.data) return;
   const [status = 0, note = 0, velocity = 0] = event.data;
   const command = status & 0xf0;
-  const effective = note + transpose;
-  if (effective < NOTE_MIN || effective > NOTE_MAX) return;
+  if (note < NOTE_MIN || note > NOTE_MAX) return;
   if (command === 0x90 && velocity > 0) {
     const normalizedVelocity = Math.max(.05, velocity / 127);
     void Tone.start();
-    synth.triggerAttack(midiName(effective), Tone.now(), normalizedVelocity);
-    activeNotes.set(effective, normalizedVelocity);
+    synth.triggerAttack(midiName(note), Tone.now(), normalizedVelocity);
+    activeNotes.set(note, normalizedVelocity);
     emptyState.classList.add("hidden");
     velocityLegend.hidden = false;
-    emitParticles(effective, normalizedVelocity);
+    emitParticles(note, normalizedVelocity);
   } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
-    synth.triggerRelease(midiName(effective));
-    activeNotes.delete(effective);
+    synth.triggerRelease(midiName(note));
+    activeNotes.delete(note);
   }
 }
 
@@ -593,10 +592,8 @@ function pointerToMidi(event: PointerEvent) {
 
 let pointerNote: number | null = null;
 canvas.addEventListener("pointerdown", async event => {
-  const pressed = pointerToMidi(event);
-  if (pressed === null) return;
-  const midi = pressed + transpose;
-  if (midi < NOTE_MIN || midi > NOTE_MAX) return;
+  const midi = pointerToMidi(event);
+  if (midi === null) return;
   await Tone.start();
   canvas.setPointerCapture(event.pointerId);
   pointerNote = midi;
