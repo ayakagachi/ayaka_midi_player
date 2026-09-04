@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1622" />
+    <title>澄音 · MIDI Piano</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="澄音首页">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span>澄音</span>
+        </a>
+        <div class="midi-status" id="midiStatus"><span></span>未连接 MIDI 键盘</div>
+        <button class="quiet-button" id="connectMidiButton" type="button">连接设备</button>
+      </header>
+
+      <section class="workspace" aria-label="MIDI 播放器">
+        <div class="song-head">
+          <div>
+            <p class="song-kicker">当前曲目</p>
+            <h1 id="songTitle">把 MIDI 放进来，听见它</h1>
+            <p class="song-meta" id="songMeta">支持 .mid 和 .midi 文件，也可以直接连接电子琴</p>
+          </div>
+          <label class="file-button" for="fileInput">导入 MIDI</label>
+          <input id="fileInput" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden />
+        </div>
+
+        <div class="stage" id="dropZone">
+          <canvas id="visualizer" aria-label="MIDI 音符瀑布流与钢琴键盘"></canvas>
+          <div class="empty-state" id="emptyState">
+            <div class="drop-glyph" aria-hidden="true">♩</div>
+            <h2>拖入一首 MIDI</h2>
+            <p>音符会沿着时间落到琴键上</p>
+            <label class="secondary-file-button" for="fileInput">选择文件</label>
+          </div>
+          <div class="drop-mask" id="dropMask">松开以载入 MIDI</div>
+        </div>
+
+        <div class="transport" aria-label="播放控制">
+          <button class="play-button" id="playButton" type="button" aria-label="播放" disabled>
+            <span id="playIcon">▶</span>
+          </button>
+          <span class="time" id="currentTime">0:00</span>
+          <input class="timeline" id="timeline" type="range" min="0" max="1000" value="0" aria-label="播放进度" disabled />
+          <span class="time" id="duration">0:00</span>
+          <label class="control-field">速度
+            <select id="speedSelect">
+              <option value="0.5">0.5×</option>
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+              <option value="2">2×</option>
+            </select>
+          </label>
+          <label class="volume-control" aria-label="音量">音量
+            <input id="volumeSlider" type="range" min="-36" max="0" value="-8" />
+          </label>
+        </div>
+      </section>
+
+      <footer class="statusbar">
+        <span id="trackInfo">等待 MIDI</span>
+        <span>浏览器本地处理 · 文件不会上传</span>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
