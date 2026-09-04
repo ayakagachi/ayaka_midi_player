@@ -8,16 +8,24 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
-        <a class="brand" href="#" aria-label="Sumine 澄音首页">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-          <span>Sumine 澄音</span>
-        </a>
-        <div class="midi-status" id="midiStatus"><span></span>未连接 MIDI 键盘</div>
-        <button class="quiet-button" id="connectMidiButton" type="button">连接设备</button>
+      <header class="app-header">
+        <div class="topbar">
+          <a class="brand" href="#studio" aria-label="Sumine 澄音首页">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span>Sumine 澄音</span>
+          </a>
+          <div class="midi-status" id="midiStatus"><span></span>未连接 MIDI 键盘</div>
+          <button class="quiet-button" id="connectMidiButton" type="button">连接设备</button>
+        </div>
+        <nav class="page-tabs" aria-label="主要功能" role="tablist">
+          <button class="page-tab active" type="button" role="tab" aria-selected="true" aria-controls="page-studio" data-page-target="studio">演奏</button>
+          <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-library" data-page-target="library">曲库</button>
+          <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-practice" data-page-target="practice">练习</button>
+          <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-settings" data-page-target="settings">设置</button>
+        </nav>
       </header>
 
-      <section class="workspace" aria-label="MIDI 播放器">
+      <section class="workspace page-view" id="page-studio" data-page="studio" role="tabpanel" aria-label="演奏">
         <div class="song-head">
           <div>
             <p class="song-kicker">当前曲目</p>
@@ -59,6 +67,65 @@
           <label class="volume-control" aria-label="音量">音量
             <input id="volumeSlider" type="range" min="-36" max="0" value="-8" />
           </label>
+        </div>
+      </section>
+
+      <section class="feature-page page-view" id="page-library" data-page="library" role="tabpanel" aria-label="曲库" hidden>
+        <div class="page-intro">
+          <p>曲库</p>
+          <h1>把想弹的曲子放在手边</h1>
+          <span>当前版本只保留本次打开的曲目，文件仍在你的电脑上。</span>
+        </div>
+        <div class="feature-surface library-empty" id="libraryEmpty">
+          <div>
+            <h2>还没有打开曲目</h2>
+            <p>导入 MIDI 后，它会出现在这里。</p>
+          </div>
+          <button class="file-button" id="libraryImportButton" type="button">导入 MIDI</button>
+        </div>
+        <div class="feature-surface current-song" id="libraryCurrent" hidden>
+          <div>
+            <p class="surface-label">当前曲目</p>
+            <h2 id="librarySongTitle">未命名曲目</h2>
+            <p id="librarySongMeta">等待 MIDI</p>
+          </div>
+          <button class="file-button" id="libraryOpenButton" type="button">打开演奏</button>
+        </div>
+      </section>
+
+      <section class="feature-page page-view" id="page-practice" data-page="practice" role="tabpanel" aria-label="练习" hidden>
+        <div class="page-intro">
+          <p>练习</p>
+          <h1>把难的地方，慢慢弹会</h1>
+          <span>练习功能将围绕当前曲目逐步加入。</span>
+        </div>
+        <div class="feature-list" aria-label="计划中的练习功能">
+          <div class="feature-row"><strong>A–B 片段循环</strong><span>选定一段反复练习，并逐轮提升速度。</span><em>下一阶段</em></div>
+          <div class="feature-row"><strong>等待模式</strong><span>弹对当前音符后，乐曲才继续向前。</span><em>下一阶段</em></div>
+          <div class="feature-row"><strong>左右手拆分</strong><span>单独练习任一只手，再合手演奏。</span><em>规划中</em></div>
+          <div class="feature-row"><strong>节奏反馈</strong><span>记录错音、漏音和提前或延后的音符。</span><em>规划中</em></div>
+        </div>
+      </section>
+
+      <section class="feature-page page-view" id="page-settings" data-page="settings" role="tabpanel" aria-label="设置" hidden>
+        <div class="page-intro">
+          <p>设置</p>
+          <h1>设备与声音</h1>
+          <span>管理 MIDI 输入和当前声音引擎。</span>
+        </div>
+        <div class="settings-list">
+          <div class="settings-row">
+            <div><strong>MIDI 输入</strong><span id="settingsMidiStatus">未连接 MIDI 键盘</span></div>
+            <button class="quiet-button" id="settingsMidiButton" type="button">连接设备</button>
+          </div>
+          <div class="settings-row">
+            <div><strong>声音引擎</strong><span>Tone.js 合成钢琴 · 64 复音</span></div>
+            <span class="setting-value">浏览器本地</span>
+          </div>
+          <div class="settings-row">
+            <div><strong>后台播放</strong><span>切换到其他窗口时继续播放当前曲目。</span></div>
+            <span class="setting-value enabled">已开启</span>
+          </div>
         </div>
       </section>
 

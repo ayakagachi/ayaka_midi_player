@@ -36,6 +36,16 @@ const dropZone = document.querySelector<HTMLElement>("#dropZone")!;
 const dropMask = document.querySelector<HTMLElement>("#dropMask")!;
 const midiStatus = document.querySelector<HTMLElement>("#midiStatus")!;
 const connectMidiButton = document.querySelector<HTMLButtonElement>("#connectMidiButton")!;
+const settingsMidiButton = document.querySelector<HTMLButtonElement>("#settingsMidiButton")!;
+const settingsMidiStatus = document.querySelector<HTMLElement>("#settingsMidiStatus")!;
+const libraryImportButton = document.querySelector<HTMLButtonElement>("#libraryImportButton")!;
+const libraryOpenButton = document.querySelector<HTMLButtonElement>("#libraryOpenButton")!;
+const libraryEmpty = document.querySelector<HTMLElement>("#libraryEmpty")!;
+const libraryCurrent = document.querySelector<HTMLElement>("#libraryCurrent")!;
+const librarySongTitle = document.querySelector<HTMLElement>("#librarySongTitle")!;
+const librarySongMeta = document.querySelector<HTMLElement>("#librarySongMeta")!;
+const pageTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-page-target]"));
+const pageViews = Array.from(document.querySelectorAll<HTMLElement>("[data-page]"));
 
 const synth = new Tone.PolySynth(Tone.Synth, {
   oscillator: { type: "triangle8" },
@@ -54,6 +64,23 @@ let speed = 1;
 let isPlaying = false;
 let midiAccess: MIDIAccess | null = null;
 const activeNotes = new Set<number>();
+
+function activatePage(pageName: string) {
+  const pageExists = pageViews.some(page => page.dataset.page === pageName);
+  const activePage = pageExists ? pageName : "studio";
+  pageViews.forEach(page => { page.hidden = page.dataset.page !== activePage; });
+  pageTabs.forEach(tab => {
+    const isActive = tab.dataset.pageTarget === activePage;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  });
+  if (activePage === "studio") requestAnimationFrame(resizeCanvas);
+}
+
+function openPage(pageName: string) {
+  if (window.location.hash === `#${pageName}`) activatePage(pageName);
+  else window.location.hash = pageName;
+}
 
 const isBlack = (midi: number) => [1, 3, 6, 8, 10].includes(midi % 12);
 const midiName = (midi: number) => `${["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][midi % 12]}${Math.floor(midi / 12) - 1}`;
@@ -243,12 +270,17 @@ async function loadMidi(file: File) {
     const bpm = Math.round(midi.header.tempos[0]?.bpm || 120);
     songTitle.textContent = midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
     songMeta.textContent = `${musicalTracks} 条音轨 · ${notes.length.toLocaleString()} 个音符 · ${bpm} BPM`;
+    librarySongTitle.textContent = songTitle.textContent;
+    librarySongMeta.textContent = songMeta.textContent;
+    libraryEmpty.hidden = true;
+    libraryCurrent.hidden = false;
     trackInfo.textContent = `${file.name} · ${formatTime(duration)}`;
     durationLabel.textContent = formatTime(duration);
     emptyState.classList.add("hidden");
     playButton.disabled = !notes.length;
     timeline.disabled = !notes.length;
     if (!notes.length) songMeta.textContent = "这个文件中没有可播放的钢琴音符";
+    openPage("studio");
   } catch (error) {
     console.error(error);
     songMeta.textContent = "无法读取这个 MIDI，文件可能已损坏";
@@ -278,15 +310,19 @@ function bindMidiInputs() {
     midiStatus.classList.add("connected");
     midiStatus.innerHTML = `<span></span>${inputs.length === 1 ? inputs[0].name || "MIDI 键盘" : `${inputs.length} 个 MIDI 输入`}已连接`;
     connectMidiButton.textContent = "重新扫描";
+    settingsMidiStatus.textContent = inputs.length === 1 ? inputs[0].name || "MIDI 键盘已连接" : `${inputs.length} 个 MIDI 输入已连接`;
+    settingsMidiButton.textContent = "重新扫描";
   } else {
     midiStatus.classList.remove("connected");
     midiStatus.innerHTML = "<span></span>未发现 MIDI 输入";
+    settingsMidiStatus.textContent = "未发现 MIDI 输入";
   }
 }
 
 async function connectMidi() {
   if (!navigator.requestMIDIAccess) {
     midiStatus.innerHTML = "<span></span>当前浏览器不支持 Web MIDI";
+    settingsMidiStatus.textContent = "当前浏览器不支持 Web MIDI";
     return;
   }
   try {
@@ -295,6 +331,7 @@ async function connectMidi() {
     bindMidiInputs();
   } catch {
     midiStatus.innerHTML = "<span></span>MIDI 权限未开启";
+    settingsMidiStatus.textContent = "MIDI 权限未开启";
   }
 }
 
@@ -344,6 +381,11 @@ canvas.addEventListener("pointercancel", () => {
 fileInput.addEventListener("change", () => { if (fileInput.files?.[0]) void loadMidi(fileInput.files[0]); });
 playButton.addEventListener("click", togglePlayback);
 connectMidiButton.addEventListener("click", connectMidi);
+settingsMidiButton.addEventListener("click", connectMidi);
+libraryImportButton.addEventListener("click", () => fileInput.click());
+libraryOpenButton.addEventListener("click", () => openPage("studio"));
+pageTabs.forEach(tab => tab.addEventListener("click", () => openPage(tab.dataset.pageTarget || "studio")));
+window.addEventListener("hashchange", () => activatePage(window.location.hash.slice(1)));
 speedSelect.addEventListener("change", () => {
   const wasPlaying = isPlaying;
   if (wasPlaying) pausePlayback();
@@ -374,4 +416,5 @@ dropZone.addEventListener("drop", event => {
 
 new ResizeObserver(resizeCanvas).observe(canvas);
 resizeCanvas();
+activatePage(window.location.hash.slice(1));
 requestAnimationFrame(draw);
