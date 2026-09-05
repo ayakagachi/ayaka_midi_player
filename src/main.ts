@@ -49,6 +49,7 @@ const songTitle = document.querySelector<HTMLElement>("#songTitle")!;
 const songMeta = document.querySelector<HTMLElement>("#songMeta")!;
 const trackInfo = document.querySelector<HTMLElement>("#trackInfo")!;
 const emptyState = document.querySelector<HTMLElement>("#emptyState")!;
+const emptyStateConnect = document.querySelector<HTMLButtonElement>("#emptyStateConnect")!;
 const velocityLegend = document.querySelector<HTMLElement>("#velocityLegend")!;
 const dropZone = document.querySelector<HTMLElement>("#dropZone")!;
 const dropMask = document.querySelector<HTMLElement>("#dropMask")!;
@@ -56,6 +57,7 @@ const midiStatus = document.querySelector<HTMLElement>("#midiStatus")!;
 const connectMidiButton = document.querySelector<HTMLButtonElement>("#connectMidiButton")!;
 const settingsMidiButton = document.querySelector<HTMLButtonElement>("#settingsMidiButton")!;
 const settingsMidiStatus = document.querySelector<HTMLElement>("#settingsMidiStatus")!;
+const midiDeviceSelect = document.querySelector<HTMLSelectElement>("#midiDeviceSelect")!;
 const settingsInstrumentName = document.querySelector<HTMLElement>("#settingsInstrumentName")!;
 const libraryImportButton = document.querySelector<HTMLButtonElement>("#libraryImportButton")!;
 const libraryOpenButton = document.querySelector<HTMLButtonElement>("#libraryOpenButton")!;
@@ -143,6 +145,7 @@ let transpose = 0;
 let isPlaying = false;
 let config = loadConfig();
 let midiAccess: MIDIAccess | null = null;
+let activeMidiInputId: string | null = null;
 let nextVisualNoteIndex = 0;
 let lastVisualTime = 0;
 let lastFrameTime = performance.now();
@@ -639,10 +642,20 @@ function handleMidiMessage(event: MIDIMessageEvent) {
 function bindMidiInputs() {
   if (!midiAccess) return;
   const inputs = Array.from(midiAccess.inputs.values());
-  inputs.forEach(input => { input.onmidimessage = handleMidiMessage; });
+  midiDeviceSelect.replaceChildren(...inputs.map(input => {
+    const option = document.createElement("option");
+    option.value = input.id;
+    option.textContent = input.name || "MIDI 键盘";
+    return option;
+  }));
+  midiDeviceSelect.hidden = inputs.length < 2;
+  if (!inputs.some(input => input.id === activeMidiInputId)) activeMidiInputId = inputs[0]?.id ?? null;
+  if (activeMidiInputId) midiDeviceSelect.value = activeMidiInputId;
+  inputs.forEach(input => { input.onmidimessage = input.id === activeMidiInputId ? handleMidiMessage : null; });
+  const activeInput = inputs.find(input => input.id === activeMidiInputId);
   if (inputs.length) {
     midiStatus.classList.add("connected");
-    midiStatus.innerHTML = `<span></span>${inputs.length === 1 ? inputs[0].name || "MIDI 键盘" : `${inputs.length} 个 MIDI 输入`}已连接`;
+    midiStatus.innerHTML = `<span></span>${inputs.length === 1 ? inputs[0].name || "MIDI 键盘" : `${activeInput?.name || "MIDI 键盘"} 已连接`}`;
     connectMidiButton.textContent = "重新扫描";
     settingsMidiStatus.textContent = inputs.length === 1 ? inputs[0].name || "MIDI 键盘已连接" : `${inputs.length} 个 MIDI 输入已连接`;
     settingsMidiButton.textContent = "重新扫描";
@@ -652,6 +665,11 @@ function bindMidiInputs() {
     settingsMidiStatus.textContent = "未发现 MIDI 输入";
   }
 }
+
+midiDeviceSelect.addEventListener("change", () => {
+  activeMidiInputId = midiDeviceSelect.value;
+  bindMidiInputs();
+});
 
 async function connectMidi() {
   if (!navigator.requestMIDIAccess) {
@@ -734,6 +752,7 @@ fileInput.addEventListener("change", () => { if (fileInput.files?.[0]) void load
 playButton.addEventListener("click", togglePlayback);
 connectMidiButton.addEventListener("click", connectMidi);
 settingsMidiButton.addEventListener("click", connectMidi);
+emptyStateConnect.addEventListener("click", connectMidi);
 libraryImportButton.addEventListener("click", () => fileInput.click());
 libraryOpenButton.addEventListener("click", () => openPage("studio"));
 pageTabs.forEach(tab => tab.addEventListener("click", () => openPage(tab.dataset.pageTarget || "studio")));

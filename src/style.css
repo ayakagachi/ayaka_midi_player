@@ -121,6 +121,8 @@ h1 { margin: 0; color: #f2f8f8; font-family: "IBM Plex Sans SC", sans-serif; fon
 .empty-state, .drop-mask { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle at 50% 76%, rgba(78,225,208,.09), transparent 30%); }
 .empty-state { pointer-events: none; }
 .empty-state .secondary-file-button { pointer-events: auto; }
+.empty-actions { display: flex; gap: 10px; }
+.empty-actions .secondary-file-button { pointer-events: auto; }
 .empty-state.hidden { display: none; }
 .empty-state h2 { margin: 12px 0 5px; font-family: "IBM Plex Sans SC", sans-serif; font-weight: 500; font-size: 24px; }
 .empty-state p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }

@@ -55,8 +55,11 @@
           <div class="empty-state" id="emptyState">
             <div class="drop-glyph" aria-hidden="true">♩</div>
             <h2>拖入一首 MIDI</h2>
-            <p>音符会沿着时间落到琴键上</p>
-            <label class="secondary-file-button" for="fileInput">选择文件</label>
+            <p>音符会沿着时间落到琴键上，也可以直接在下方琴键上演奏</p>
+            <div class="empty-actions">
+              <label class="secondary-file-button" for="fileInput">选择文件</label>
+              <button class="secondary-file-button" id="emptyStateConnect" type="button">连接 MIDI 键盘</button>
+            </div>
           </div>
           <div class="drop-mask" id="dropMask">松开以载入 MIDI</div>
         </div>
@@ -136,6 +139,7 @@
         <div class="settings-list">
           <div class="settings-row">
             <div><strong>MIDI 输入</strong><span id="settingsMidiStatus">未连接 MIDI 键盘</span></div>
+            <select id="midiDeviceSelect" hidden></select>
             <button class="quiet-button" id="settingsMidiButton" type="button">连接设备</button>
           </div>
           <div class="settings-row">
