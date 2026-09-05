@@ -1,30 +1,74 @@
+import { SAMPLED_INSTRUMENTS, type SampledInstrumentId } from "./sampledInstruments";
+
+export type EngineCategory = "synth" | "sampled";
+export type SynthInstrumentId = "piano" | "bright" | "electric" | "organ";
+
 export interface AppConfig {
   /** 切走标签页时是否继续播放 */
   backgroundPlayback: boolean;
   /** 导入 MIDI 时是否保存到曲库文件夹 */
   saveToLibrary: boolean;
-  /** 声音引擎：synth 合成器（即时）或 sampler 采样钢琴（更真实、延迟更低，需加载） */
-  soundEngine: "synth" | "sampler";
+  /** 声音引擎大类：合成器或采样乐器（具体音色在演奏页切换） */
+  engine: EngineCategory;
+  /** 合成器音色（engine 为 synth 时生效） */
+  synthInstrument: SynthInstrumentId;
+  /** 采样乐器（engine 为 sampled 时生效） */
+  sampledInstrument: SampledInstrumentId;
 }
 
 export const defaultConfig: AppConfig = {
   backgroundPlayback: true,
   saveToLibrary: false,
-  soundEngine: "synth",
+  engine: "synth",
+  synthInstrument: "piano",
+  sampledInstrument: "piano",
 };
 
 const STORAGE_KEY = "sumine:config";
+
+const SYNTH_INSTRUMENTS: readonly SynthInstrumentId[] = ["piano", "bright", "electric", "organ"];
+
+function isSynthInstrument(value: unknown): value is SynthInstrumentId {
+  return typeof value === "string" && (SYNTH_INSTRUMENTS as readonly string[]).includes(value);
+}
+
+function isSampledInstrument(value: unknown): value is SampledInstrumentId {
+  return typeof value === "string" && value in SAMPLED_INSTRUMENTS;
+}
+
+function resolveConfig(parsed: Record<string, unknown>): AppConfig {
+  const backgroundPlayback = typeof parsed.backgroundPlayback === "boolean" ? parsed.backgroundPlayback : defaultConfig.backgroundPlayback;
+  const saveToLibrary = typeof parsed.saveToLibrary === "boolean" ? parsed.saveToLibrary : defaultConfig.saveToLibrary;
+
+  // 旧版只存 soundEngine（"synth" | "sampler" | 采样乐器id），迁移为「大类 + 具体乐器」
+  if (typeof parsed.engine !== "string" && typeof parsed.soundEngine === "string") {
+    const se = parsed.soundEngine;
+    const base = {
+      backgroundPlayback,
+      saveToLibrary,
+      synthInstrument: "piano" as SynthInstrumentId,
+      sampledInstrument: "piano" as SampledInstrumentId,
+    };
+    if (se === "synth") return { ...base, engine: "synth" };
+    if (se === "sampler") return { ...base, engine: "sampled" };
+    if (isSampledInstrument(se)) return { ...base, engine: "sampled", sampledInstrument: se };
+    return { ...defaultConfig, backgroundPlayback, saveToLibrary };
+  }
+
+  return {
+    backgroundPlayback,
+    saveToLibrary,
+    engine: parsed.engine === "synth" || parsed.engine === "sampled" ? parsed.engine : defaultConfig.engine,
+    synthInstrument: isSynthInstrument(parsed.synthInstrument) ? parsed.synthInstrument : defaultConfig.synthInstrument,
+    sampledInstrument: isSampledInstrument(parsed.sampledInstrument) ? parsed.sampledInstrument : defaultConfig.sampledInstrument,
+  };
+}
 
 export function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaultConfig };
-    const parsed = JSON.parse(raw) as Partial<AppConfig>;
-    return {
-      backgroundPlayback: typeof parsed.backgroundPlayback === "boolean" ? parsed.backgroundPlayback : defaultConfig.backgroundPlayback,
-      saveToLibrary: typeof parsed.saveToLibrary === "boolean" ? parsed.saveToLibrary : defaultConfig.saveToLibrary,
-      soundEngine: parsed.soundEngine === "sampler" || parsed.soundEngine === "synth" ? parsed.soundEngine : defaultConfig.soundEngine,
-    };
+    return resolveConfig(JSON.parse(raw) as Record<string, unknown>);
   } catch {
     return { ...defaultConfig };
   }

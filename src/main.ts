@@ -1,7 +1,8 @@
 import { Midi } from "@tonejs/midi";
 import * as Tone from "tone";
-import { loadConfig, onConfigChange, updateConfig } from "./config";
+import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type SynthInstrumentId } from "./config";
 import * as library from "./libraryStore";
+import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrumentId } from "./sampledInstruments";
 import "./style.css";
 
 type PianoNote = {
@@ -94,37 +95,36 @@ const synth = new Tone.PolySynth(Tone.Synth, {
 synth.maxPolyphony = 48;
 synth.connect(masterBus);
 
-// Sampler 引擎：Salamander 钢琴采样，真实音色且触发延迟更低
-let samplerReady = false;
-let samplerFailed = false;
-const sampler = new Tone.Sampler({
-  urls: {
-    "C4": "C4.mp3",
-    "D#4": "Ds4.mp3",
-    "F#4": "Fs4.mp3",
-    "A4": "A4.mp3",
-  },
-  release: 1,
-  baseUrl: "https://tonejs.github.io/audio/salamander/",
-  onload: () => {
-    samplerReady = true;
-    refreshSoundEngineUI();
-  },
-  onerror: (error: unknown) => {
-    console.error("钢琴采样加载失败，请检查网络", error);
-    samplerFailed = true;
-    refreshSoundEngineUI();
-  },
-});
-sampler.connect(masterBus);
-
+// 采样引擎：tonejs-instruments 采样乐器，按需加载并缓存
 type ActiveEngine = Tone.PolySynth<Tone.Synth> | Tone.Sampler;
 let activeEngine: ActiveEngine = synth;
+let activeSynthInstrument: SynthInstrumentId | null = null;
 
-const SOUND_ENGINE_LABELS: Record<"synth" | "sampler", string> = {
-  synth: "合成器",
-  sampler: "采样钢琴",
-};
+const samplerCache = new Map<SampledInstrumentId, Tone.Sampler>();
+const samplerState = new Map<SampledInstrumentId, "loading" | "ready" | "failed">();
+
+function getSampler(id: SampledInstrumentId): Tone.Sampler {
+  const cached = samplerCache.get(id);
+  if (cached) return cached;
+  const sampler = new Tone.Sampler({
+    urls: samplerUrls(id),
+    release: 0.5,
+    baseUrl: `${SAMPLE_BASE_URL}${id}/`,
+    onload: () => {
+      samplerState.set(id, "ready");
+      refreshEngineUI();
+    },
+    onerror: (error: unknown) => {
+      console.error(`采样乐器 ${id} 加载失败，请检查网络`, error);
+      samplerState.set(id, "failed");
+      refreshEngineUI();
+    },
+  });
+  sampler.connect(masterBus);
+  samplerCache.set(id, sampler);
+  samplerState.set(id, "loading");
+  return sampler;
+}
 
 const instrumentPresets = {
   piano: {
@@ -147,11 +147,9 @@ const instrumentPresets = {
     oscillator: "sine4",
     envelope: { attack: 0.025, decay: 0.16, sustain: 0.88, release: 0.42 },
   },
-} as const;
+} as const satisfies Record<SynthInstrumentId, { label: string; oscillator: string; envelope: Record<string, number> }>;
 
-type InstrumentId = keyof typeof instrumentPresets;
-
-function applyInstrument(instrument: InstrumentId) {
+function applySynthPreset(instrument: SynthInstrumentId) {
   const preset = instrumentPresets[instrument];
   activeNotes.clear();
   const fade = 0.045; // 切换音色先短淡出，避免波形突变产生“啪”声
@@ -170,33 +168,80 @@ function applyInstrument(instrument: InstrumentId) {
     synth.volume.setValueAtTime(-60, t);
     synth.volume.linearRampTo(0, fade, t);
   }, (fade + 0.01) * 1000);
-  refreshSoundEngineUI();
+  refreshEngineUI();
 }
 
-// 切换声音引擎：切走时静默旧引擎；乐器下拉只在合成器模式可选
-function applySoundEngine(engine: "synth" | "sampler") {
-  const nextEngine = engine === "sampler" ? sampler : synth;
-  if (activeEngine !== nextEngine) {
-    activeEngine.releaseAll();
-    activeEngine = nextEngine;
-    activeNotes.clear();
+// 按当前配置同步引擎：切走时静默旧引擎，合成器音色变化时重新配置
+function syncEngine() {
+  if (config.engine === "synth") {
+    if (activeEngine !== synth) {
+      activeEngine.releaseAll();
+      activeEngine = synth;
+      activeNotes.clear();
+    }
+    if (activeSynthInstrument !== config.synthInstrument) {
+      activeSynthInstrument = config.synthInstrument;
+      applySynthPreset(config.synthInstrument);
+    }
+  } else {
+    const sampler = getSampler(config.sampledInstrument);
+    if (activeEngine !== sampler) {
+      activeEngine.releaseAll();
+      activeEngine = sampler;
+      activeNotes.clear();
+    }
+    activeSynthInstrument = config.synthInstrument;
   }
-  refreshSoundEngineUI();
+  refreshEngineUI();
 }
 
-function refreshSoundEngineUI() {
-  const isSampler = activeEngine === sampler;
-  instrumentSelect.disabled = isSampler;
-  if (!isSampler) {
-    const preset = instrumentPresets[instrumentSelect.value as InstrumentId];
-    settingsInstrumentName.textContent = `${preset.label} · Tone.js 48 复音`;
-    return;
+function refreshEngineUI() {
+  let label: string;
+  let status: string;
+  if (config.engine === "synth") {
+    label = instrumentPresets[config.synthInstrument].label;
+    status = "Tone.js 48 复音";
+  } else {
+    label = SAMPLED_INSTRUMENTS[config.sampledInstrument].label;
+    const state = samplerState.get(config.sampledInstrument) ?? "loading";
+    status = state === "failed" ? "加载失败，请检查网络" : state === "ready" ? "采样就绪" : "加载中…";
   }
-  settingsInstrumentName.textContent = samplerFailed
-    ? "采样钢琴 · 加载失败，请检查网络"
-    : samplerReady
-      ? "采样钢琴 · Salamander Grand"
-      : "采样钢琴 · 加载中…";
+  settingsInstrumentName.textContent = `${label} · ${status}`;
+}
+
+// 填充设置页「声音引擎」大类下拉
+function populateEngineOptions() {
+  soundEngineSelect.replaceChildren();
+  const synthOption = document.createElement("option");
+  synthOption.value = "synth";
+  synthOption.textContent = "合成器";
+  const sampledOption = document.createElement("option");
+  sampledOption.value = "sampled";
+  sampledOption.textContent = "采样乐器";
+  soundEngineSelect.append(synthOption, sampledOption);
+}
+
+// 填充首页「乐器」下拉：按当前大类显示合成器音色或采样乐器
+let instrumentOptionsFor: EngineCategory | null = null;
+function populateInstrumentOptions() {
+  if (instrumentOptionsFor === config.engine) return;
+  instrumentOptionsFor = config.engine;
+  instrumentSelect.replaceChildren();
+  if (config.engine === "synth") {
+    for (const [id, preset] of Object.entries(instrumentPresets)) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = preset.label;
+      instrumentSelect.append(option);
+    }
+  } else {
+    for (const [id, def] of Object.entries(SAMPLED_INSTRUMENTS)) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = def.label;
+      instrumentSelect.append(option);
+    }
+  }
 }
 
 const transport = Tone.getTransport();
@@ -506,7 +551,7 @@ function startPlayback() {
   nextVisualNoteIndex = findNextNoteIndex(lastVisualTime);
   transport.ticks = currentTime * TICKS_PER_SECOND;
   transport.start();
-  playIcon.textContent = "Ⅱ";
+  playIcon.textContent = "❚❚";
   playButton.setAttribute("aria-label", "暂停");
 }
 
@@ -533,7 +578,7 @@ document.addEventListener("visibilitychange", () => {
 
 onConfigChange(next => {
   config = next;
-  applySoundEngine(config.soundEngine);
+  syncEngine();
   if (!config.backgroundPlayback && document.hidden && isPlaying) {
     pausePlayback();
     pausedByHidden = true;
@@ -599,8 +644,10 @@ async function refreshLibrary(requestPermission = false) {
 }
 
 function refreshSettings() {
-  soundEngineSelect.value = config.soundEngine;
-  refreshSoundEngineUI();
+  soundEngineSelect.value = config.engine;
+  populateInstrumentOptions();
+  instrumentSelect.value = config.engine === "synth" ? config.synthInstrument : config.sampledInstrument;
+  refreshEngineUI();
   toggleBackgroundPlayback.setAttribute("aria-checked", String(config.backgroundPlayback));
   if (!library.isSupported()) {
     toggleSaveToLibrary.disabled = true;
@@ -875,6 +922,18 @@ canvas.addEventListener("pointercancel", () => {
 
 fileInput.addEventListener("change", () => { if (fileInput.files?.[0]) void loadMidi(fileInput.files[0]); });
 playButton.addEventListener("click", togglePlayback);
+
+// 空格键切换播放/暂停（焦点在输入控件上时不拦截，避免与按钮/下拉冲突）
+function isInteractiveElement(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(target.tagName)
+    || target.closest('[contenteditable="true"]') !== null;
+}
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || event.repeat || isInteractiveElement(event.target)) return;
+  event.preventDefault();
+  void togglePlayback();
+});
 connectMidiButton.addEventListener("click", connectMidi);
 settingsMidiButton.addEventListener("click", connectMidi);
 emptyStateConnect.addEventListener("click", connectMidi);
@@ -895,11 +954,14 @@ volumeSlider.addEventListener("input", () => { masterVolume.volume.value = Numbe
 transposeDownButton.addEventListener("click", () => setTranspose(transpose - 1));
 transposeUpButton.addEventListener("click", () => setTranspose(transpose + 1));
 instrumentSelect.addEventListener("change", () => {
-  applyInstrument(instrumentSelect.value as InstrumentId);
+  if (config.engine === "synth") {
+    updateConfig({ synthInstrument: instrumentSelect.value as SynthInstrumentId });
+  } else {
+    updateConfig({ sampledInstrument: instrumentSelect.value as SampledInstrumentId });
+  }
 });
 soundEngineSelect.addEventListener("change", () => {
-  const engine = soundEngineSelect.value === "sampler" ? "sampler" : "synth";
-  updateConfig({ soundEngine: engine });
+  updateConfig({ engine: soundEngineSelect.value as EngineCategory });
 });
 toggleBackgroundPlayback.addEventListener("click", () => {
   updateConfig({ backgroundPlayback: !config.backgroundPlayback });
@@ -938,7 +1000,8 @@ dropZone.addEventListener("drop", event => {
 new ResizeObserver(resizeCanvas).observe(canvas);
 resizeCanvas();
 activatePage(window.location.hash.slice(1));
-applySoundEngine(config.soundEngine);
+populateEngineOptions();
+syncEngine();
 refreshSettings();
 void library.restore().then(() => {
   refreshSettings();

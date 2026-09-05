@@ -35,12 +35,7 @@
           </div>
           <div class="studio-actions">
             <label class="instrument-control" for="instrumentSelect">乐器
-              <select id="instrumentSelect">
-                <option value="piano" selected>原声钢琴</option>
-                <option value="bright">明亮钢琴</option>
-                <option value="electric">电钢琴</option>
-                <option value="organ">管风琴</option>
-              </select>
+              <select id="instrumentSelect" aria-label="乐器"></select>
             </label>
             <button class="quiet-button" id="unloadSongButton" type="button" hidden>自由演奏</button>
             <label class="file-button" for="fileInput">导入 MIDI</label>
@@ -146,13 +141,11 @@
           <div class="settings-row">
             <div>
               <strong>声音引擎</strong>
-              <span>切换整体发声引擎，采样钢琴音色更真实。</span>
+              <span>选择声音引擎大类：合成器或采样乐器；具体音色在演奏页切换。</span>
               <span class="setting-value" id="settingsInstrumentName">原声钢琴 · Tone.js 48 复音</span>
+              <span class="setting-value">采样来源 tonejs-instruments · CC-BY 3.0</span>
             </div>
-            <select id="soundEngineSelect" aria-label="声音引擎">
-              <option value="synth" selected>合成器</option>
-              <option value="sampler">采样钢琴</option>
-            </select>
+            <select id="soundEngineSelect" aria-label="声音引擎"></select>
           </div>
           <div class="settings-row">
             <div><strong>后台播放</strong><span>切换到其他窗口时继续播放当前曲目。</span></div>
