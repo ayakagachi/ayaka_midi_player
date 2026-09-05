@@ -31,6 +31,12 @@ const BASE_BPM = 120;
 const LEFT_COLOR = "#55a7ff";
 const RIGHT_COLOR = "#4ee1d0";
 
+// 降低音频输出延迟：使用 interactive 缓冲策略 + 缩短 Tone 调度提前量
+Tone.setContext(new Tone.Context({
+  latencyHint: "interactive",
+  lookAhead: 0.01,
+}));
+
 const canvas = document.querySelector<HTMLCanvasElement>("#visualizer")!;
 const ctx = canvas.getContext("2d")!;
 const fileInput = document.querySelector<HTMLInputElement>("#fileInput")!;
@@ -58,6 +64,7 @@ const connectMidiButton = document.querySelector<HTMLButtonElement>("#connectMid
 const settingsMidiButton = document.querySelector<HTMLButtonElement>("#settingsMidiButton")!;
 const settingsMidiStatus = document.querySelector<HTMLElement>("#settingsMidiStatus")!;
 const midiDeviceSelect = document.querySelector<HTMLSelectElement>("#midiDeviceSelect")!;
+const soundEngineSelect = document.querySelector<HTMLSelectElement>("#soundEngineSelect")!;
 const settingsInstrumentName = document.querySelector<HTMLElement>("#settingsInstrumentName")!;
 const libraryImportButton = document.querySelector<HTMLButtonElement>("#libraryImportButton")!;
 const libraryOpenButton = document.querySelector<HTMLButtonElement>("#libraryOpenButton")!;
@@ -86,6 +93,38 @@ const synth = new Tone.PolySynth(Tone.Synth, {
 });
 synth.maxPolyphony = 48;
 synth.connect(masterBus);
+
+// Sampler 引擎：Salamander 钢琴采样，真实音色且触发延迟更低
+let samplerReady = false;
+let samplerFailed = false;
+const sampler = new Tone.Sampler({
+  urls: {
+    "C4": "C4.mp3",
+    "D#4": "Ds4.mp3",
+    "F#4": "Fs4.mp3",
+    "A4": "A4.mp3",
+  },
+  release: 1,
+  baseUrl: "https://tonejs.github.io/audio/salamander/",
+  onload: () => {
+    samplerReady = true;
+    refreshSoundEngineUI();
+  },
+  onerror: (error: unknown) => {
+    console.error("钢琴采样加载失败，请检查网络", error);
+    samplerFailed = true;
+    refreshSoundEngineUI();
+  },
+});
+sampler.connect(masterBus);
+
+type ActiveEngine = Tone.PolySynth<Tone.Synth> | Tone.Sampler;
+let activeEngine: ActiveEngine = synth;
+
+const SOUND_ENGINE_LABELS: Record<"synth" | "sampler", string> = {
+  synth: "合成器",
+  sampler: "采样钢琴",
+};
 
 const instrumentPresets = {
   piano: {
@@ -131,7 +170,33 @@ function applyInstrument(instrument: InstrumentId) {
     synth.volume.setValueAtTime(-60, t);
     synth.volume.linearRampTo(0, fade, t);
   }, (fade + 0.01) * 1000);
-  settingsInstrumentName.textContent = `${preset.label} · Tone.js 48 复音`;
+  refreshSoundEngineUI();
+}
+
+// 切换声音引擎：切走时静默旧引擎；乐器下拉只在合成器模式可选
+function applySoundEngine(engine: "synth" | "sampler") {
+  const nextEngine = engine === "sampler" ? sampler : synth;
+  if (activeEngine !== nextEngine) {
+    activeEngine.releaseAll();
+    activeEngine = nextEngine;
+    activeNotes.clear();
+  }
+  refreshSoundEngineUI();
+}
+
+function refreshSoundEngineUI() {
+  const isSampler = activeEngine === sampler;
+  instrumentSelect.disabled = isSampler;
+  if (!isSampler) {
+    const preset = instrumentPresets[instrumentSelect.value as InstrumentId];
+    settingsInstrumentName.textContent = `${preset.label} · Tone.js 48 复音`;
+    return;
+  }
+  settingsInstrumentName.textContent = samplerFailed
+    ? "采样钢琴 · 加载失败，请检查网络"
+    : samplerReady
+      ? "采样钢琴 · Salamander Grand"
+      : "采样钢琴 · 加载中…";
 }
 
 const transport = Tone.getTransport();
@@ -410,7 +475,7 @@ function scheduleSong() {
     const startTicks = Math.round(note.time * TICKS_PER_SECOND);
     const durationTicks = Math.max(1, Math.round(note.duration * TICKS_PER_SECOND));
     transport.schedule(time => {
-      synth.triggerAttackRelease(midiName(effective), `${durationTicks}i`, time, Math.max(.08, note.velocity));
+      activeEngine.triggerAttackRelease(midiName(effective), `${durationTicks}i`, time, Math.max(.08, note.velocity));
     }, `${startTicks}i`);
   }
   const endTicks = Math.max(1, Math.ceil(duration * TICKS_PER_SECOND));
@@ -449,7 +514,7 @@ function pausePlayback() {
   if (isPlaying) currentTime = Math.min(duration, transport.ticks / TICKS_PER_SECOND);
   isPlaying = false;
   transport.pause();
-  synth.releaseAll();
+  activeEngine.releaseAll();
   playIcon.textContent = "▶";
   playButton.setAttribute("aria-label", "播放");
 }
@@ -468,6 +533,7 @@ document.addEventListener("visibilitychange", () => {
 
 onConfigChange(next => {
   config = next;
+  applySoundEngine(config.soundEngine);
   if (!config.backgroundPlayback && document.hidden && isPlaying) {
     pausePlayback();
     pausedByHidden = true;
@@ -533,6 +599,8 @@ async function refreshLibrary(requestPermission = false) {
 }
 
 function refreshSettings() {
+  soundEngineSelect.value = config.soundEngine;
+  refreshSoundEngineUI();
   toggleBackgroundPlayback.setAttribute("aria-checked", String(config.backgroundPlayback));
   if (!library.isSupported()) {
     toggleSaveToLibrary.disabled = true;
@@ -685,13 +753,13 @@ function handleMidiMessage(event: MIDIMessageEvent) {
   if (command === 0x90 && velocity > 0) {
     const normalizedVelocity = Math.max(.05, velocity / 127);
     void Tone.start();
-    synth.triggerAttack(midiName(note), Tone.now(), normalizedVelocity);
+    activeEngine.triggerAttack(midiName(note), Tone.now(), normalizedVelocity);
     activeNotes.set(note, normalizedVelocity);
     emptyState.classList.add("hidden");
     velocityLegend.hidden = false;
     emitParticles(note, normalizedVelocity);
   } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
-    synth.triggerRelease(midiName(note));
+    activeEngine.triggerRelease(midiName(note));
     activeNotes.delete(note);
   }
 }
@@ -773,7 +841,7 @@ canvas.addEventListener("pointerdown", async event => {
   canvas.setPointerCapture(event.pointerId);
   pointerNote = midi;
   const velocity = event.pressure > 0 ? Math.max(.25, event.pressure) : .65;
-  synth.triggerAttack(midiName(midi), Tone.now(), velocity);
+  activeEngine.triggerAttack(midiName(midi), Tone.now(), velocity);
   activeNotes.set(midi, velocity);
   emptyState.classList.add("hidden");
   velocityLegend.hidden = false;
@@ -783,24 +851,24 @@ canvas.addEventListener("pointermove", event => {
   if (pointerNote === null) return;
   const midi = pointerToMidi(event);
   if (midi === pointerNote) return;
-  synth.triggerRelease(midiName(pointerNote));
+  activeEngine.triggerRelease(midiName(pointerNote));
   activeNotes.delete(pointerNote);
   pointerNote = midi;
   if (midi !== null) {
     const velocity = event.pressure > 0 ? Math.max(.25, event.pressure) : .65;
-    synth.triggerAttack(midiName(midi), Tone.now(), velocity);
+    activeEngine.triggerAttack(midiName(midi), Tone.now(), velocity);
     activeNotes.set(midi, velocity);
     emitParticles(midi, velocity);
   }
 });
 canvas.addEventListener("pointerup", () => {
   if (pointerNote === null) return;
-  synth.triggerRelease(midiName(pointerNote));
+  activeEngine.triggerRelease(midiName(pointerNote));
   activeNotes.delete(pointerNote);
   pointerNote = null;
 });
 canvas.addEventListener("pointercancel", () => {
-  if (pointerNote !== null) synth.triggerRelease(midiName(pointerNote));
+  if (pointerNote !== null) activeEngine.triggerRelease(midiName(pointerNote));
   activeNotes.clear();
   pointerNote = null;
 });
@@ -828,6 +896,10 @@ transposeDownButton.addEventListener("click", () => setTranspose(transpose - 1))
 transposeUpButton.addEventListener("click", () => setTranspose(transpose + 1));
 instrumentSelect.addEventListener("change", () => {
   applyInstrument(instrumentSelect.value as InstrumentId);
+});
+soundEngineSelect.addEventListener("change", () => {
+  const engine = soundEngineSelect.value === "sampler" ? "sampler" : "synth";
+  updateConfig({ soundEngine: engine });
 });
 toggleBackgroundPlayback.addEventListener("click", () => {
   updateConfig({ backgroundPlayback: !config.backgroundPlayback });
@@ -866,6 +938,7 @@ dropZone.addEventListener("drop", event => {
 new ResizeObserver(resizeCanvas).observe(canvas);
 resizeCanvas();
 activatePage(window.location.hash.slice(1));
+applySoundEngine(config.soundEngine);
 refreshSettings();
 void library.restore().then(() => {
   refreshSettings();

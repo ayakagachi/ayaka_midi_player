@@ -144,8 +144,15 @@
             <button class="quiet-button" id="settingsMidiButton" type="button">连接设备</button>
           </div>
           <div class="settings-row">
-            <div><strong>声音引擎</strong><span id="settingsInstrumentName">原声钢琴 · Tone.js 64 复音</span></div>
-            <span class="setting-value">浏览器本地</span>
+            <div>
+              <strong>声音引擎</strong>
+              <span>切换整体发声引擎，采样钢琴音色更真实。</span>
+              <span class="setting-value" id="settingsInstrumentName">原声钢琴 · Tone.js 48 复音</span>
+            </div>
+            <select id="soundEngineSelect" aria-label="声音引擎">
+              <option value="synth" selected>合成器</option>
+              <option value="sampler">采样钢琴</option>
+            </select>
           </div>
           <div class="settings-row">
             <div><strong>后台播放</strong><span>切换到其他窗口时继续播放当前曲目。</span></div>

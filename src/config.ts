@@ -3,11 +3,14 @@ export interface AppConfig {
   backgroundPlayback: boolean;
   /** 导入 MIDI 时是否保存到曲库文件夹 */
   saveToLibrary: boolean;
+  /** 声音引擎：synth 合成器（即时）或 sampler 采样钢琴（更真实、延迟更低，需加载） */
+  soundEngine: "synth" | "sampler";
 }
 
 export const defaultConfig: AppConfig = {
   backgroundPlayback: true,
   saveToLibrary: false,
+  soundEngine: "synth",
 };
 
 const STORAGE_KEY = "sumine:config";
@@ -20,6 +23,7 @@ export function loadConfig(): AppConfig {
     return {
       backgroundPlayback: typeof parsed.backgroundPlayback === "boolean" ? parsed.backgroundPlayback : defaultConfig.backgroundPlayback,
       saveToLibrary: typeof parsed.saveToLibrary === "boolean" ? parsed.saveToLibrary : defaultConfig.saveToLibrary,
+      soundEngine: parsed.soundEngine === "sampler" || parsed.soundEngine === "synth" ? parsed.soundEngine : defaultConfig.soundEngine,
     };
   } catch {
     return { ...defaultConfig };
