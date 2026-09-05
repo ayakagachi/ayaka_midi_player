@@ -69,6 +69,7 @@ const libraryList = document.querySelector<HTMLElement>("#libraryList")!;
 const toggleBackgroundPlayback = document.querySelector<HTMLButtonElement>("#toggleBackgroundPlayback")!;
 const toggleSaveToLibrary = document.querySelector<HTMLButtonElement>("#toggleSaveToLibrary")!;
 const libraryDirStatus = document.querySelector<HTMLElement>("#libraryDirStatus")!;
+const unloadSongButton = document.querySelector<HTMLButtonElement>("#unloadSongButton")!;
 const pageTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-page-target]"));
 const pageViews = Array.from(document.querySelectorAll<HTMLElement>("[data-page]"));
 
@@ -163,6 +164,7 @@ function activatePage(pageName: string) {
     tab.setAttribute("aria-selected", String(isActive));
   });
   if (activePage === "studio") requestAnimationFrame(resizeCanvas);
+  if (activePage === "library" && config.saveToLibrary) void refreshLibrary(true);
 }
 
 function openPage(pageName: string) {
@@ -417,6 +419,8 @@ function scheduleSong() {
     Tone.getDraw().schedule(() => {
       isPlaying = false;
       currentTime = 0;
+      lastVisualTime = 0;
+      nextVisualNoteIndex = 0;
       playIcon.textContent = "▶";
       playButton.setAttribute("aria-label", "播放");
     }, time);
@@ -472,8 +476,24 @@ onConfigChange(next => {
   void refreshLibrary();
 });
 
-async function refreshLibrary() {
-  const entries = config.saveToLibrary && await library.restore() ? await library.list() : [];
+let refreshingLibrary = false;
+
+async function refreshLibrary(requestPermission = false) {
+  if (refreshingLibrary) return;
+  refreshingLibrary = true;
+  let entries: library.LibraryEntry[] = [];
+  try {
+    if (config.saveToLibrary) {
+      const restored = await library.restore();
+      if (restored) entries = await library.list();
+      else if (requestPermission && library.hasDirectory()) {
+        // 已有句柄但权限未恢复，且当前是用户主动切到曲库页，尝试静默恢复
+        if (await library.ensureReady()) entries = await library.list();
+      }
+    }
+  } finally {
+    refreshingLibrary = false;
+  }
   libraryList.replaceChildren(...entries.map(entry => {
     const item = document.createElement("div");
     item.className = "library-item";
@@ -526,7 +546,14 @@ function refreshSettings() {
     libraryDirStatus.textContent = "未选择文件夹";
   } else {
     const name = library.directoryName();
-    libraryDirStatus.textContent = name ? `曲库文件夹：${name}` : "未选择文件夹";
+    if (name) {
+      libraryDirStatus.textContent = `曲库文件夹：${name}`;
+      void library.restore().then(granted => {
+        if (!granted) libraryDirStatus.textContent = `曲库文件夹：${name}（点击进入曲库页授权后可见）`;
+      });
+    } else {
+      libraryDirStatus.textContent = "未选择文件夹";
+    }
   }
 }
 
@@ -550,6 +577,35 @@ function updateTransposeTag() {
   transposeTag.textContent = transpose > 0 ? `+${transpose} 调` : `${transpose} 调`;
   if (transpose !== 0 && notes.length && !transposeTag.isConnected) songMeta.append(transposeTag);
   if (transpose === 0 && transposeTag.isConnected) transposeTag.remove();
+}
+
+function unloadSong() {
+  pausePlayback();
+  transport.stop();
+  transport.cancel();
+  notes = [];
+  duration = 0;
+  currentTime = 0;
+  particles.length = 0;
+  nextVisualNoteIndex = 0;
+  lastVisualTime = 0;
+  activeNotes.clear();
+
+  songTitle.textContent = "把 MIDI 放进来，听见它";
+  songMeta.replaceChildren("支持 .mid 和 .midi 文件，也可以直接连接电子琴");
+  trackInfo.textContent = "自由演奏模式";
+  durationLabel.textContent = "0:00";
+  currentTimeLabel.textContent = "0:00";
+  timeline.value = "0";
+  timeline.disabled = true;
+  playButton.disabled = true;
+  unloadSongButton.hidden = true;
+  emptyState.classList.remove("hidden");
+  velocityLegend.hidden = true;
+
+  if (transposeTag.isConnected) transposeTag.remove();
+  libraryCurrent.hidden = true;
+  void refreshLibrary();
 }
 
 async function loadMidi(file: File, displayName?: string) {
@@ -612,6 +668,7 @@ async function loadMidi(file: File, displayName?: string) {
     velocityLegend.hidden = false;
     playButton.disabled = !notes.length;
     timeline.disabled = !notes.length;
+    unloadSongButton.hidden = false;
     if (!notes.length) songMeta.textContent = "这个文件中没有可播放的钢琴音符";
     openPage("studio");
   } catch (error) {
@@ -755,6 +812,7 @@ settingsMidiButton.addEventListener("click", connectMidi);
 emptyStateConnect.addEventListener("click", connectMidi);
 libraryImportButton.addEventListener("click", () => fileInput.click());
 libraryOpenButton.addEventListener("click", () => openPage("studio"));
+unloadSongButton.addEventListener("click", unloadSong);
 pageTabs.forEach(tab => tab.addEventListener("click", () => openPage(tab.dataset.pageTarget || "studio")));
 window.addEventListener("hashchange", () => activatePage(window.location.hash.slice(1)));
 speedSelect.addEventListener("change", () => {

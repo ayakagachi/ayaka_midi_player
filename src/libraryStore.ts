@@ -61,6 +61,11 @@ async function verifyPermission(handle: FileSystemDirectoryHandle, request: bool
   return await capable.requestPermission({ mode: "readwrite" }) === "granted";
 }
 
+/** 是否已持有目录句柄（可能尚未恢复权限） */
+export function hasDirectory(): boolean {
+  return dirHandle !== null;
+}
+
 /** 恢复已保存的目录句柄（不主动请求权限）。返回是否已有可用目录。 */
 export async function restore(): Promise<boolean> {
   if (!isSupported()) return false;
