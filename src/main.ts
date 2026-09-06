@@ -3,6 +3,7 @@ import * as Tone from "tone";
 import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type SynthInstrumentId } from "./config";
 import * as library from "./libraryStore";
 import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrumentId } from "./sampledInstruments";
+import { analyzeChords, analyzeKeyFromChords, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
 import "./style.css";
 
 type PianoNote = {
@@ -58,6 +59,8 @@ const trackInfo = document.querySelector<HTMLElement>("#trackInfo")!;
 const emptyState = document.querySelector<HTMLElement>("#emptyState")!;
 const emptyStateConnect = document.querySelector<HTMLButtonElement>("#emptyStateConnect")!;
 const velocityLegend = document.querySelector<HTMLElement>("#velocityLegend")!;
+const harmonyHud = document.querySelector<HTMLElement>("#harmonyHud")!;
+const harmonyKey = document.querySelector<HTMLElement>("#harmonyKey")!;
 const dropZone = document.querySelector<HTMLElement>("#dropZone")!;
 const dropMask = document.querySelector<HTMLElement>("#dropMask")!;
 const midiStatus = document.querySelector<HTMLElement>("#midiStatus")!;
@@ -254,6 +257,8 @@ let currentTime = 0;
 let speed = 1;
 let transpose = 0;
 let isPlaying = false;
+let analysis: AnalysisResult = { keySegments: [], chordEvents: [] };
+let lastKeyLabel = "";
 let config = loadConfig();
 let midiAccess: MIDIAccess | null = null;
 let activeMidiInputId: string | null = null;
@@ -373,6 +378,17 @@ function drawParticles(deltaTime: number) {
   ctx.restore();
 }
 
+function updateHarmonyHud(time: number) {
+  if (harmonyHud.hidden) return;
+  const currentKey = findSegmentAt(analysis.keySegments, time);
+  const keyLabel = currentKey ? transposedKeyLabel(currentKey, transpose) : "";
+  if (keyLabel !== lastKeyLabel) {
+    lastKeyLabel = keyLabel;
+    harmonyKey.textContent = keyLabel || "调性模糊";
+    harmonyKey.classList.toggle("uncertain", !keyLabel);
+  }
+}
+
 function draw() {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -398,6 +414,8 @@ function draw() {
     currentTime = nextTime;
     lastVisualTime = nextTime;
   }
+
+  updateHarmonyHud(currentTime);
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#08131d";
@@ -705,6 +723,9 @@ function unloadSong() {
   nextVisualNoteIndex = 0;
   lastVisualTime = 0;
   activeNotes.clear();
+  analysis = { keySegments: [], chordEvents: [] };
+  lastKeyLabel = "";
+  harmonyHud.hidden = true;
 
   songTitle.textContent = "把 MIDI 放进来，听见它";
   songMeta.replaceChildren("支持 .mid 和 .midi 文件，也可以直接连接电子琴");
@@ -745,6 +766,20 @@ async function loadMidi(file: File, displayName?: string) {
     nextVisualNoteIndex = 0;
     lastVisualTime = 0;
     scheduleSong();
+    // 和声分析：逐拍和弦 + 和弦推调（统一大调），按 ticks 对齐，不受播放速度影响
+    const analysisNotes = midi.tracks.flatMap(track =>
+      track.notes.map(note => ({
+        midi: note.midi,
+        velocity: note.velocity,
+        ticks: note.ticks,
+        durationTicks: note.durationTicks,
+        channel: track.channel,
+      })),
+    );
+    const chordEvents = analyzeChords(analysisNotes, midi.header.ppq, ticks => midi.header.ticksToSeconds(ticks));
+    analysis = { keySegments: analyzeKeyFromChords(chordEvents), chordEvents };
+    lastKeyLabel = "";
+    harmonyHud.hidden = analysis.keySegments.length === 0;
     const musicalTracks = midi.tracks.filter(track => track.notes.length > 0).length;
     const bpm = Math.round(midi.header.tempos[0]?.bpm || 120);
     songTitle.textContent = displayName || midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
