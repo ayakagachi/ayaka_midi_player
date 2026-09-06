@@ -3,7 +3,7 @@ import * as Tone from "tone";
 import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type SynthInstrumentId } from "./config";
 import * as library from "./libraryStore";
 import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrumentId } from "./sampledInstruments";
-import { analyzeChords, analyzeKeyFromChords, estimateTempo, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
+import { analyzeChords, analyzeKeyFromChords, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
 import "./style.css";
 
 type PianoNote = {
@@ -790,13 +790,11 @@ async function loadMidi(file: File, displayName?: string) {
     harmonyHud.hidden = analysis.keySegments.length === 0;
     const musicalTracks = midi.tracks.filter(track => track.notes.length > 0).length;
     const declaredBpm = midi.header.tempos[0]?.bpm;
-    const bpmEstimated = declaredBpm == null;
-    const bpm = Math.round(declaredBpm ?? estimateTempo(analysisNotes, midi.header.ppq) ?? 120);
     songTitle.textContent = displayName || midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
     const metaTags = [
       { text: `${musicalTracks} 条音轨`, tone: "blue" },
       { text: `${notes.length.toLocaleString()} 个音符`, tone: "cyan" },
-      { text: `${bpmEstimated ? "≈" : ""}${bpm} BPM`, tone: "amber" },
+      { text: declaredBpm != null ? `${Math.round(declaredBpm)} BPM` : "无速度标记", tone: "amber" },
     ];
     songMeta.replaceChildren(...metaTags.map(({ text, tone }) => {
       const tag = document.createElement("span");
