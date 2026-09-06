@@ -142,6 +142,24 @@ h1 { margin: 0; color: #f2f8f8; font-family: "IBM Plex Sans SC", sans-serif; fon
 .timeline { width: 100%; }
 .control-field, .volume-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 select { padding: 7px 28px 7px 9px; border: 1px solid #29414d; border-radius: 7px; color: var(--ink); background: #0e1f2a; }
+.settings-row .particle-tuners { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; width: 100%; }
+.particle-tuner { gap: 10px; }
+.particle-tuner span { flex: 0 0 auto; }
+.particle-tuner input[type="range"] { flex: 1 1 auto; min-width: 0; width: auto; }
+.particle-tuner input[type="number"] {
+  width: 62px;
+  padding: 6px 8px;
+  border: 1px solid #29414d;
+  border-radius: 7px;
+  color: var(--ink);
+  background: #0e1f2a;
+  font-variant-numeric: tabular-nums;
+}
+.particle-tuner input[type="number"]::-webkit-outer-spin-button,
+.particle-tuner input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.particle-tuner input[type="number"] { -moz-appearance: textfield; }
+.particle-tuners input[type="range"]:disabled,
+.particle-tuners input[type="number"]:disabled { opacity: .38; }
 .volume-control input { width: 92px; }
 
 .transpose-control { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
@@ -193,6 +211,10 @@ button:focus-visible, label:focus-visible, input:focus-visible, select:focus-vis
   .studio-actions { width: 100%; justify-content: flex-end; }
   .feature-surface, .settings-row { align-items: flex-start; flex-direction: column; }
   .feature-surface .file-button { margin-left: 0; }
+}
+
+@media (max-width: 760px) {
+  .settings-row .particle-tuners { grid-template-columns: 1fr; gap: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

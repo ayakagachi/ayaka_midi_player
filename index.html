@@ -151,6 +151,38 @@
             <select id="soundEngineSelect" aria-label="声音引擎"></select>
           </div>
           <div class="settings-row">
+            <div>
+              <strong>粒子特效</strong>
+              <span>落键与播放音符时的视觉反馈，可选多种或关闭。</span>
+            </div>
+            <select id="particleEffectSelect" aria-label="粒子特效">
+              <option value="spark">经典粒子</option>
+              <option value="starlight">星光闪烁</option>
+              <option value="ripple">涟漪光环</option>
+              <option value="note">音符飘散</option>
+              <option value="none">无</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <div class="particle-tuners">
+              <div class="control-field particle-tuner">
+                <span>速度</span>
+                <input type="range" id="particleSpeedSlider" min="50" max="200" step="5" value="100" aria-label="粒子速度" />
+                <input type="number" id="particleSpeedInput" min="0.5" max="2" step="0.05" value="1" aria-label="粒子速度倍率" />
+              </div>
+              <div class="control-field particle-tuner">
+                <span>范围</span>
+                <input type="range" id="particleSpreadSlider" min="50" max="200" step="5" value="100" aria-label="粒子范围" />
+                <input type="number" id="particleSpreadInput" min="0.5" max="2" step="0.05" value="1" aria-label="粒子范围倍率" />
+              </div>
+              <div class="control-field particle-tuner">
+                <span>数量</span>
+                <input type="range" id="particleAmountSlider" min="50" max="200" step="5" value="100" aria-label="粒子数量" />
+                <input type="number" id="particleAmountInput" min="0.5" max="2" step="0.05" value="1" aria-label="粒子数量倍率" />
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
             <div><strong>后台播放</strong><span>切换到其他窗口时继续播放当前曲目。</span></div>
             <button class="toggle" id="toggleBackgroundPlayback" type="button" role="switch" aria-checked="true" aria-label="后台播放"></button>
           </div>

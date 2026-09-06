@@ -1,6 +1,6 @@
 import { Midi } from "@tonejs/midi";
 import * as Tone from "tone";
-import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type SynthInstrumentId } from "./config";
+import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type ParticleEffectId, type SynthInstrumentId } from "./config";
 import * as library from "./libraryStore";
 import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrumentId } from "./sampledInstruments";
 import { analyzeChords, analyzeKeyFromChords, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
@@ -15,16 +15,20 @@ type PianoNote = {
   track: number;
 };
 
-type Particle = {
+type ParticleBase = {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
   size: number;
   life: number;
   maxLife: number;
   color: string;
 };
+// 粒子特效的可区分联合：不同特效保留各自需要的运动/形态字段
+type Particle =
+  | (ParticleBase & { kind: "spark"; vx: number; vy: number })
+  | (ParticleBase & { kind: "starlight"; vx: number; vy: number; rotation: number; spin: number })
+  | (ParticleBase & { kind: "ripple" })
+  | (ParticleBase & { kind: "note"; vx: number; vy: number; glyph: string });
 
 const NOTE_MIN = 21;
 const NOTE_MAX = 108;
@@ -69,6 +73,13 @@ const settingsMidiButton = document.querySelector<HTMLButtonElement>("#settingsM
 const settingsMidiStatus = document.querySelector<HTMLElement>("#settingsMidiStatus")!;
 const midiDeviceSelect = document.querySelector<HTMLSelectElement>("#midiDeviceSelect")!;
 const soundEngineSelect = document.querySelector<HTMLSelectElement>("#soundEngineSelect")!;
+const particleEffectSelect = document.querySelector<HTMLSelectElement>("#particleEffectSelect")!;
+const particleSpeedSlider = document.querySelector<HTMLInputElement>("#particleSpeedSlider")!;
+const particleSpreadSlider = document.querySelector<HTMLInputElement>("#particleSpreadSlider")!;
+const particleAmountSlider = document.querySelector<HTMLInputElement>("#particleAmountSlider")!;
+const particleSpeedInput = document.querySelector<HTMLInputElement>("#particleSpeedInput")!;
+const particleSpreadInput = document.querySelector<HTMLInputElement>("#particleSpreadInput")!;
+const particleAmountInput = document.querySelector<HTMLInputElement>("#particleAmountInput")!;
 const settingsInstrumentName = document.querySelector<HTMLElement>("#settingsInstrumentName")!;
 const libraryImportButton = document.querySelector<HTMLButtonElement>("#libraryImportButton")!;
 const libraryOpenButton = document.querySelector<HTMLButtonElement>("#libraryOpenButton")!;
@@ -334,26 +345,117 @@ function findNextNoteIndex(time: number) {
 
 function emitParticles(midi: number, rawVelocity: number) {
   if (reducedMotion.matches || canvas.clientWidth === 0) return;
+  const effect = config.particleEffect;
+  if (effect === "none") return;
   const velocity = Math.min(1, Math.max(.05, rawVelocity));
   const key = noteGeometry(midi, canvas.clientWidth);
   const originX = key.x + key.width / 2;
   const originY = canvas.clientHeight - KEYBOARD_HEIGHT;
-  const count = 3 + Math.round(velocity * 13);
   const color = midi < 60 ? "85, 167, 255" : "78, 225, 208";
-  for (let index = 0; index < count; index++) {
-    const maxLife = .34 + Math.random() * (.26 + velocity * .34);
-    particles.push({
-      x: originX + (Math.random() - .5) * key.width * velocity,
-      y: originY - 2,
-      vx: (Math.random() - .5) * (24 + velocity * 115),
-      vy: -(35 + Math.random() * (45 + velocity * 105)),
-      size: 1.2 + Math.random() * (1.5 + velocity * 3.2),
-      life: maxLife,
-      maxLife,
-      color,
-    });
+  // 全局倍率：速度缩放运动快慢，范围缩放横向扩散，数量缩放粒子个数
+  const speedMul = config.particleSpeed;
+  const spreadMul = config.particleSpread;
+  const amountMul = config.particleAmount;
+
+  switch (effect) {
+    case "spark": {
+      const count = Math.max(1, Math.round((3 + velocity * 13) * amountMul));
+      for (let index = 0; index < count; index++) {
+        const maxLife = .34 + Math.random() * (.26 + velocity * .34);
+        particles.push({
+          kind: "spark",
+          x: originX + (Math.random() - .5) * key.width * velocity * spreadMul,
+          y: originY - 2,
+          vx: (Math.random() - .5) * (24 + velocity * 115) * speedMul * spreadMul,
+          vy: -(35 + Math.random() * (45 + velocity * 105)) * speedMul,
+          size: 1.2 + Math.random() * (1.5 + velocity * 3.2),
+          life: maxLife,
+          maxLife,
+          color,
+        });
+      }
+      break;
+    }
+    case "starlight": {
+      const count = Math.max(1, Math.round((2 + velocity * 6) * amountMul));
+      for (let index = 0; index < count; index++) {
+        const maxLife = .9 + Math.random() * (.5 + velocity * .5);
+        particles.push({
+          kind: "starlight",
+          x: originX + (Math.random() - .5) * key.width * 1.1 * spreadMul,
+          y: originY - 4,
+          vx: (Math.random() - .5) * 44 * speedMul * spreadMul,
+          vy: -(16 + Math.random() * (28 + velocity * 46)) * speedMul,
+          size: 3 + Math.random() * (2.5 + velocity * 4),
+          life: maxLife,
+          maxLife,
+          color,
+          rotation: Math.random() * Math.PI * 2,
+          spin: (Math.random() - .5) * (1.5 + velocity * 2.5),
+        });
+      }
+      break;
+    }
+    case "ripple": {
+      const count = Math.max(1, Math.round((1 + velocity * 2) * amountMul));
+      for (let index = 0; index < count; index++) {
+        // 速度倍率压缩寿命 → 涟漪扩散更快
+        const maxLife = (.6 + Math.random() * .3) / speedMul;
+        particles.push({
+          kind: "ripple",
+          x: originX + (Math.random() - .5) * key.width * .5 * spreadMul,
+          y: originY,
+          size: (20 + velocity * (40 + Math.random() * 24)) * spreadMul,
+          life: maxLife,
+          maxLife,
+          color,
+        });
+      }
+      break;
+    }
+    case "note": {
+      const count = Math.max(1, Math.round((1 + velocity * 2) * amountMul));
+      for (let index = 0; index < count; index++) {
+        const maxLife = 1 + Math.random() * (.5 + velocity * .5);
+        particles.push({
+          kind: "note",
+          x: originX + (Math.random() - .5) * key.width * 1.1 * spreadMul,
+          y: originY - 4,
+          vx: (Math.random() - .5) * 48 * speedMul * spreadMul,
+          vy: -(20 + Math.random() * (26 + velocity * 36)) * speedMul,
+          size: 9 + Math.random() * (4 + velocity * 6),
+          life: maxLife,
+          maxLife,
+          color,
+          glyph: Math.random() < .5 ? "♪" : "♩",
+        });
+      }
+      break;
+    }
   }
   if (particles.length > 700) particles.splice(0, particles.length - 700);
+}
+
+// 四芒星闪光：四点外凸、凹边内收，随 rotation 旋转
+function drawSparkle(x: number, y: number, radius: number, rotation: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const outer = rotation + i * Math.PI / 2;
+    const ox = x + Math.cos(outer) * radius;
+    const oy = y + Math.sin(outer) * radius;
+    if (i === 0) ctx.moveTo(ox, oy);
+    else ctx.lineTo(ox, oy);
+    const inner = outer + Math.PI / 4;
+    const next = rotation + (i + 1) * Math.PI / 2;
+    ctx.quadraticCurveTo(
+      x + Math.cos(inner) * radius * .16,
+      y + Math.sin(inner) * radius * .16,
+      x + Math.cos(next) * radius,
+      y + Math.sin(next) * radius,
+    );
+  }
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawParticles(deltaTime: number) {
@@ -366,14 +468,50 @@ function drawParticles(deltaTime: number) {
       particles.splice(index, 1);
       continue;
     }
-    particle.x += particle.vx * deltaTime;
-    particle.y += particle.vy * deltaTime;
-    particle.vy += 95 * deltaTime;
     const progress = particle.life / particle.maxLife;
-    ctx.fillStyle = `rgba(${particle.color}, ${Math.min(1, progress * 1.35)})`;
-    ctx.beginPath();
-    ctx.arc(particle.x, particle.y, particle.size * (.55 + progress * .45), 0, Math.PI * 2);
-    ctx.fill();
+
+    switch (particle.kind) {
+      case "spark": {
+        particle.x += particle.vx * deltaTime;
+        particle.y += particle.vy * deltaTime;
+        particle.vy += 95 * deltaTime;
+        ctx.fillStyle = `rgba(${particle.color}, ${Math.min(1, progress * 1.35)})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size * (.55 + progress * .45), 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "starlight": {
+        particle.x += particle.vx * deltaTime;
+        particle.y += particle.vy * deltaTime;
+        particle.rotation += particle.spin * deltaTime;
+        const fade = Math.min(1, progress * 1.5);
+        const twinkle = .4 + .6 * Math.abs(Math.sin(particle.life * 6 + particle.rotation));
+        ctx.fillStyle = `rgba(${particle.color}, ${Math.max(0, Math.min(1, fade * twinkle))})`;
+        drawSparkle(particle.x, particle.y, particle.size * (.6 + progress * .4), particle.rotation);
+        break;
+      }
+      case "ripple": {
+        const grow = 1 - progress; // 0→1 向外扩散
+        const radius = particle.size * grow;
+        ctx.strokeStyle = `rgba(${particle.color}, ${progress * .55})`;
+        ctx.lineWidth = .5 + progress * 1.5;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "note": {
+        particle.x += particle.vx * deltaTime;
+        particle.y += particle.vy * deltaTime;
+        ctx.fillStyle = `rgba(${particle.color}, ${Math.min(1, progress * 1.4)})`;
+        ctx.font = `${particle.size}px "Manrope", "IBM Plex Sans SC", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(particle.glyph, particle.x, particle.y);
+        break;
+      }
+    }
   }
   ctx.restore();
 }
@@ -661,8 +799,34 @@ async function refreshLibrary(requestPermission = false) {
   if (!notes.length) libraryEmpty.hidden = entries.length > 0;
 }
 
+function multiplierText(value: number) {
+  return String(Math.round(value * 100) / 100);
+}
+
+function clampMultiplier(value: number) {
+  return Number.isFinite(value) ? Math.min(2, Math.max(.5, value)) : 1;
+}
+
+// 回显粒子参数：滑杆与数值框同步，并在「无」特效时置灰
+function syncParticleTuners() {
+  const disabled = config.particleEffect === "none";
+  const tuners: [HTMLInputElement, HTMLInputElement, number][] = [
+    [particleSpeedSlider, particleSpeedInput, config.particleSpeed],
+    [particleSpreadSlider, particleSpreadInput, config.particleSpread],
+    [particleAmountSlider, particleAmountInput, config.particleAmount],
+  ];
+  for (const [slider, input, value] of tuners) {
+    slider.disabled = disabled;
+    input.disabled = disabled;
+    slider.value = String(Math.round(value * 100));
+    input.value = multiplierText(value);
+  }
+}
+
 function refreshSettings() {
   soundEngineSelect.value = config.engine;
+  particleEffectSelect.value = config.particleEffect;
+  syncParticleTuners();
   populateInstrumentOptions();
   instrumentSelect.value = config.engine === "synth" ? config.synthInstrument : config.sampledInstrument;
   refreshEngineUI();
@@ -1006,6 +1170,37 @@ instrumentSelect.addEventListener("change", () => {
 soundEngineSelect.addEventListener("change", () => {
   updateConfig({ engine: soundEngineSelect.value as EngineCategory });
 });
+particleEffectSelect.addEventListener("change", () => {
+  updateConfig({ particleEffect: particleEffectSelect.value as ParticleEffectId });
+  if (config.particleEffect === "none") particles.length = 0;
+});
+// 三个粒子参数：滑杆拖动时只做实时预览（改 config + 数值框，不持久化、不回写滑杆），
+// 松手或手输后再提交配置，避免拖动时的回写抖动。
+function commitParticle(key: "particleSpeed" | "particleSpread" | "particleAmount", value: number) {
+  if (key === "particleSpeed") updateConfig({ particleSpeed: value });
+  else if (key === "particleSpread") updateConfig({ particleSpread: value });
+  else updateConfig({ particleAmount: value });
+}
+const particleTuners: [HTMLInputElement, HTMLInputElement, "particleSpeed" | "particleSpread" | "particleAmount"][] = [
+  [particleSpeedSlider, particleSpeedInput, "particleSpeed"],
+  [particleSpreadSlider, particleSpreadInput, "particleSpread"],
+  [particleAmountSlider, particleAmountInput, "particleAmount"],
+];
+for (const [slider, input, key] of particleTuners) {
+  slider.addEventListener("input", () => {
+    const value = Number(slider.value) / 100;
+    input.value = multiplierText(value);
+    config[key] = value;
+  });
+  slider.addEventListener("change", () => commitParticle(key, Number(slider.value) / 100));
+  input.addEventListener("change", () => {
+    const raw = input.value.trim();
+    const value = raw === "" ? config[key] : clampMultiplier(Number(raw));
+    input.value = multiplierText(value);
+    slider.value = String(Math.round(value * 100));
+    commitParticle(key, value);
+  });
+}
 toggleBackgroundPlayback.addEventListener("click", () => {
   updateConfig({ backgroundPlayback: !config.backgroundPlayback });
 });
