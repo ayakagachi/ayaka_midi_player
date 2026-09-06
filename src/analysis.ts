@@ -442,3 +442,60 @@ export function findSegmentAt<T extends { start: number; end: number }>(segments
   }
   return null;
 }
+
+/**
+ * 无速度事件时的节拍估算（仅用于展示，播放仍按 SMF 规范默认 120 BPM）。
+ *
+ * 说明：没有速度事件的 MIDI 本身不含绝对时间基准——@tonejs/midi 的 ticksToSeconds
+ * 也会按 120 BPM 处理。所以这里的"测量"是对相对节奏的归纳 + 自然速度先验的估计，
+ * 不等于作曲者原意，只是比硬编码 120 更有依据。
+ *
+ * 方法：对音符 onset 做复合起音间隔（IOI）直方图（只用在 ticks 域，不受速度影响，
+ * 避免落入"无速度 → 默认 120 → 估算结果永远是 120"的循环），找最显著周期并换算成
+ * 主导音值（相对四分音符的倍数），再做八度校正到 70–160 BPM。
+ */
+export function estimateTempo(notes: AnalysisNote[], ppq: number): number | null {
+  if (ppq <= 0) return null;
+
+  const onsets = [...new Set(
+    notes.filter(n => n.channel !== 9 && n.ticks >= 0).map(n => n.ticks),
+  )].sort((a, b) => a - b);
+  if (onsets.length < 8) return null; // onset 太少，估不出稳定节拍
+
+  // 复合起音间隔直方图：统计每个 onset 与其后若干 onset 的间隔（ticks）。
+  // 复合间隔（隔几个音）能抵抗切分/连音，让主周期更突出。
+  const LOOKAHEAD = 16;
+  const counts = new Map<number, number>();
+  for (let i = 0; i < onsets.length; i++) {
+    const cap = Math.min(onsets.length, i + LOOKAHEAD);
+    for (let j = i + 1; j < cap; j++) {
+      const dt = onsets[j] - onsets[i];
+      if (dt > ppq * 8) break; // 只看 8 拍内的间隔
+      counts.set(dt, (counts.get(dt) ?? 0) + 1);
+    }
+  }
+  if (!counts.size) return null;
+
+  // 5% 容差邻域聚簇，抑制量化抖动，取计数最高的间隔作为主导音值
+  const entries = [...counts.entries()].sort((a, b) => a[0] - b[0]);
+  let dominantTicks = entries[0][0];
+  let best = -1;
+  for (const [dt] of entries) {
+    const tol = Math.max(1, Math.round(dt * 0.05));
+    let sum = 0;
+    for (const [d, c] of entries) {
+      if (Math.abs(d - dt) <= tol) sum += c;
+    }
+    if (sum > best) { best = sum; dominantTicks = dt; }
+  }
+  if (best <= 0) return null;
+
+  // 主导间隔换算成 BPM：以自然速度先验（约 120）为锚，BPM ≈ 120 / 主导间隔拍数。
+  // 对二分节奏（主导音值为四分/八分/二分音符）会八度校正回 120；附点/三连音等
+  // 非二分节奏则会得到偏离的估计值。
+  const beats = dominantTicks / ppq; // 主导间隔 = 几个四分音符
+  let bpm = 120 / beats;
+  while (bpm < 70) bpm *= 2;
+  while (bpm > 160) bpm /= 2;
+  return Math.round(bpm);
+}

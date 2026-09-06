@@ -3,7 +3,7 @@ import * as Tone from "tone";
 import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type SynthInstrumentId } from "./config";
 import * as library from "./libraryStore";
 import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrumentId } from "./sampledInstruments";
-import { analyzeChords, analyzeKeyFromChords, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
+import { analyzeChords, analyzeKeyFromChords, estimateTempo, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
 import "./style.css";
 
 type PianoNote = {
@@ -751,6 +751,10 @@ async function loadMidi(file: File, displayName?: string) {
   }
   try {
     pausePlayback();
+    // 立刻隐藏并清空调性 HUD，避免上一首的调性在新曲解析期间残留
+    harmonyHud.hidden = true;
+    analysis = { keySegments: [], chordEvents: [] };
+    lastKeyLabel = "";
     const midi = new Midi(await file.arrayBuffer());
     notes = midi.tracks.flatMap((track, trackIndex) => track.notes.map(note => ({
       midi: note.midi,
@@ -781,12 +785,14 @@ async function loadMidi(file: File, displayName?: string) {
     lastKeyLabel = "";
     harmonyHud.hidden = analysis.keySegments.length === 0;
     const musicalTracks = midi.tracks.filter(track => track.notes.length > 0).length;
-    const bpm = Math.round(midi.header.tempos[0]?.bpm || 120);
+    const declaredBpm = midi.header.tempos[0]?.bpm;
+    const bpmEstimated = declaredBpm == null;
+    const bpm = Math.round(declaredBpm ?? estimateTempo(analysisNotes, midi.header.ppq) ?? 120);
     songTitle.textContent = displayName || midi.name?.trim() || file.name.replace(/\.(mid|midi)$/i, "");
     const metaTags = [
       { text: `${musicalTracks} 条音轨`, tone: "blue" },
       { text: `${notes.length.toLocaleString()} 个音符`, tone: "cyan" },
-      { text: `${bpm} BPM`, tone: "amber" },
+      { text: `${bpmEstimated ? "≈" : ""}${bpm} BPM`, tone: "amber" },
     ];
     songMeta.replaceChildren(...metaTags.map(({ text, tone }) => {
       const tag = document.createElement("span");
