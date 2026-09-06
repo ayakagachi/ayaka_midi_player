@@ -726,6 +726,8 @@ function unloadSong() {
   analysis = { keySegments: [], chordEvents: [] };
   lastKeyLabel = "";
   harmonyHud.hidden = true;
+  harmonyKey.textContent = "—";
+  harmonyKey.classList.remove("uncertain");
 
   songTitle.textContent = "把 MIDI 放进来，听见它";
   songMeta.replaceChildren("支持 .mid 和 .midi 文件，也可以直接连接电子琴");
@@ -753,6 +755,8 @@ async function loadMidi(file: File, displayName?: string) {
     pausePlayback();
     // 立刻隐藏并清空调性 HUD，避免上一首的调性在新曲解析期间残留
     harmonyHud.hidden = true;
+    harmonyKey.textContent = "—";
+    harmonyKey.classList.remove("uncertain");
     analysis = { keySegments: [], chordEvents: [] };
     lastKeyLabel = "";
     const midi = new Midi(await file.arrayBuffer());
