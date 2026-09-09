@@ -22,6 +22,7 @@
           <button class="page-tab active" type="button" role="tab" aria-selected="true" aria-controls="page-studio" data-page-target="studio">演奏</button>
           <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-library" data-page-target="library">曲库</button>
           <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-practice" data-page-target="practice">练习</button>
+          <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-theory" data-page-target="theory">乐理</button>
           <button class="page-tab" type="button" role="tab" aria-selected="false" aria-controls="page-settings" data-page-target="settings">设置</button>
         </nav>
       </header>
@@ -127,6 +128,26 @@
           <div class="feature-row"><strong>左右手拆分</strong><span>单独练习任一只手，再合手演奏。</span><em>规划中</em></div>
           <div class="feature-row"><strong>节奏反馈</strong><span>记录错音、漏音和提前或延后的音符。</span><em>规划中</em></div>
         </div>
+      </section>
+
+      <section class="feature-page page-view theory-page" id="page-theory" data-page="theory" role="tabpanel" aria-label="乐理" hidden>
+        <div class="page-intro">
+          <p>乐理</p>
+          <h1>把理论，听见</h1>
+          <span>五度圈、调式、和弦与音程——点击任意内容即可发声。</span>
+        </div>
+
+        <nav class="theory-subnav" aria-label="乐理子页" role="tablist">
+          <button class="theory-chip active" type="button" role="tab" aria-selected="true" aria-controls="theory-circle" data-theory-page="circle">五度圈</button>
+          <button class="theory-chip" type="button" role="tab" aria-selected="false" aria-controls="theory-scales" data-theory-page="scales">调式与音阶</button>
+          <button class="theory-chip" type="button" role="tab" aria-selected="false" aria-controls="theory-chords" data-theory-page="chords">和弦</button>
+          <button class="theory-chip" type="button" role="tab" aria-selected="false" aria-controls="theory-interval" data-theory-page="interval">音程</button>
+        </nav>
+
+        <div class="theory-subpage" id="theory-circle" data-theory-panel="circle" role="tabpanel"></div>
+        <div class="theory-subpage" id="theory-scales" data-theory-panel="scales" role="tabpanel" hidden></div>
+        <div class="theory-subpage" id="theory-chords" data-theory-panel="chords" role="tabpanel" hidden></div>
+        <div class="theory-subpage" id="theory-interval" data-theory-panel="interval" role="tabpanel" hidden></div>
       </section>
 
       <section class="feature-page page-view" id="page-settings" data-page="settings" role="tabpanel" aria-label="设置" hidden>

@@ -4,6 +4,8 @@ import { loadConfig, onConfigChange, updateConfig, type EngineCategory, type Par
 import * as library from "./libraryStore";
 import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrumentId } from "./sampledInstruments";
 import { analyzeChords, analyzeKeyFromChords, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
+import { NOTE_MIN, NOTE_MAX, isBlack, midiName, noteGeometry, whiteKeyMetrics } from "./keyboard";
+import { initTheoryPage } from "./theoryPage";
 import "./style.css";
 
 type PianoNote = {
@@ -30,8 +32,6 @@ type Particle =
   | (ParticleBase & { kind: "ripple" })
   | (ParticleBase & { kind: "note"; vx: number; vy: number; glyph: string });
 
-const NOTE_MIN = 21;
-const NOTE_MAX = 108;
 const KEYBOARD_HEIGHT = 112;
 const BASE_BPM = 120;
 const LEFT_COLOR = "#55a7ff";
@@ -298,9 +298,6 @@ function openPage(pageName: string) {
   else window.location.hash = pageName;
 }
 
-const isBlack = (midi: number) => [1, 3, 6, 8, 10].includes(midi % 12);
-const midiName = (midi: number) => `${["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][midi % 12]}${Math.floor(midi / 12) - 1}`;
-
 function formatTime(seconds: number) {
   const safe = Math.max(0, Math.floor(seconds));
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
@@ -312,24 +309,6 @@ function resizeCanvas() {
   canvas.width = Math.round(rect.width * dpr);
   canvas.height = Math.round(rect.height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-function whiteKeyMetrics(width: number) {
-  const whiteNotes: number[] = [];
-  for (let midi = NOTE_MIN; midi <= NOTE_MAX; midi++) if (!isBlack(midi)) whiteNotes.push(midi);
-  const whiteWidth = width / whiteNotes.length;
-  const starts = new Map<number, number>();
-  whiteNotes.forEach((midi, index) => starts.set(midi, index * whiteWidth));
-  return { whiteWidth, starts };
-}
-
-function noteGeometry(midi: number, width: number) {
-  const { whiteWidth, starts } = whiteKeyMetrics(width);
-  if (!isBlack(midi)) return { x: starts.get(midi)!, width: whiteWidth, black: false };
-  let previous = midi - 1;
-  while (isBlack(previous)) previous--;
-  const center = starts.get(previous)! + whiteWidth;
-  return { x: center - whiteWidth * 0.32, width: whiteWidth * 0.64, black: true };
 }
 
 function findNextNoteIndex(time: number) {
@@ -1241,6 +1220,7 @@ activatePage(window.location.hash.slice(1));
 populateEngineOptions();
 syncEngine();
 refreshSettings();
+initTheoryPage({ output: masterBus, pianoSampler: () => getSampler("piano") });
 void library.restore().then(() => {
   refreshSettings();
   void refreshLibrary();
