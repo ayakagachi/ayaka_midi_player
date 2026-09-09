@@ -78,8 +78,10 @@ let diatonicGrid: HTMLElement;
 let chordTeachRootSelect: HTMLSelectElement;
 let chordTeachQualitySelect: HTMLSelectElement;
 let chordLabel: HTMLElement;
-let intervalA: HTMLSelectElement;
-let intervalB: HTMLSelectElement;
+let intervalNoteA: HTMLSelectElement;
+let intervalOctaveA: HTMLSelectElement;
+let intervalNoteB: HTMLSelectElement;
+let intervalOctaveB: HTMLSelectElement;
 let intervalResult: HTMLElement;
 
 // —— 通用 DOM 工具 ——
@@ -688,16 +690,20 @@ function buildChords(container: HTMLElement) {
 }
 
 // —— 音程 ——
-function intervalNoteOptions(): string[] {
-  const spellings = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
-  const result: string[] = [];
-  for (let octave = 3; octave <= 5; octave++) for (const spelling of spellings) result.push(`${spelling}${octave}`);
-  return result;
+// 音名与八度拆成两个短下拉，避免 17 拼写 × 3 八度的超长列表
+const INTERVAL_SPELLINGS = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
+
+function intervalNameA(): string {
+  return `${intervalNoteA.value}${intervalOctaveA.value}`;
+}
+
+function intervalNameB(): string {
+  return `${intervalNoteB.value}${intervalOctaveB.value}`;
 }
 
 function updateInterval() {
-  const a = intervalA.value;
-  const b = intervalB.value;
+  const a = intervalNameA();
+  const b = intervalNameB();
   const result = intervalBetween(a, b);
   const directionText = result.direction === 1 ? "上行" : result.direction === -1 ? "下行" : "同度";
   intervalResult.replaceChildren(
@@ -707,41 +713,74 @@ function updateInterval() {
   const midiA = nameToMidi(a);
   const midiB = nameToMidi(b);
   if (midiA >= 0 && midiB >= 0) {
-    intervalKeyboard?.setHighlight(new Set([midiA % 12, midiB % 12]), { rootPc: Math.min(midiA, midiB) % 12 });
+    intervalKeyboard?.setHighlight(new Set([midiA, midiB]), { exact: true, rootMidis: [Math.min(midiA, midiB)] });
   }
+}
+
+function makeIntervalSelects(labelPrefix: string, note: string, octave: string): [HTMLSelectElement, HTMLSelectElement] {
+  const noteSelect = document.createElement("select");
+  noteSelect.setAttribute("aria-label", `${labelPrefix}音名`);
+  noteSelect.replaceChildren(...INTERVAL_SPELLINGS.map(spelling => {
+    const option = document.createElement("option");
+    option.value = spelling;
+    option.textContent = spelling.replace("#", "♯").replace("b", "♭");
+    return option;
+  }));
+  noteSelect.value = note;
+  const octaveSelect = document.createElement("select");
+  octaveSelect.setAttribute("aria-label", `${labelPrefix}八度`);
+  octaveSelect.replaceChildren(...["3", "4", "5"].map(value => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    return option;
+  }));
+  octaveSelect.value = octave;
+  return [noteSelect, octaveSelect];
 }
 
 function buildInterval(container: HTMLElement) {
   const row = el("div", "theory-control-row");
-  intervalA = document.createElement("select");
-  intervalA.setAttribute("aria-label", "起始音");
-  intervalB = document.createElement("select");
-  intervalB.setAttribute("aria-label", "结束音");
-  const options = intervalNoteOptions();
-  for (const select of [intervalA, intervalB]) {
-    select.replaceChildren(...options.map(name => {
-      const option = document.createElement("option");
-      option.value = name;
-      option.textContent = name;
-      return option;
-    }));
-  }
-  intervalA.value = "C4";
-  intervalB.value = "G4";
-  const playButton = el("button", "quiet-button", "播放");
-  playButton.type = "button";
-  row.append(el("span", "theory-label", "从"), intervalA, el("span", "theory-label", "到"), intervalB, playButton);
+  [intervalNoteA, intervalOctaveA] = makeIntervalSelects("起始音", "C", "4");
+  [intervalNoteB, intervalOctaveB] = makeIntervalSelects("结束音", "G", "4");
+  const playUpButton = el("button", "quiet-button", "上行");
+  playUpButton.type = "button";
+  const playDownButton = el("button", "quiet-button", "下行");
+  playDownButton.type = "button";
+  const playTogetherButton = el("button", "quiet-button", "同时");
+  playTogetherButton.type = "button";
+  row.append(
+    el("span", "theory-label", "从"), intervalNoteA, intervalOctaveA,
+    el("span", "theory-label", "到"), intervalNoteB, intervalOctaveB,
+    playUpButton, playDownButton, playTogetherButton,
+  );
   intervalResult = el("div", "theory-interval-result", "");
   const wrap = el("div", "theory-keyboard-wrap");
   container.append(row, intervalResult, wrap);
   intervalKeyboard = mountKeyboard(wrap, { keyMin, keyMax, onNote: playNote });
 
-  intervalA.addEventListener("change", updateInterval);
-  intervalB.addEventListener("change", updateInterval);
-  playButton.addEventListener("click", () => {
-    const a = nameToMidi(intervalA.value);
-    const b = nameToMidi(intervalB.value);
-    if (a >= 0 && b >= 0) void playNotesAsync([a, b]);
+  // 旋律音程逐个发声，间隔放宽到 0.45s 便于分辨两个音
+  const INTERVAL_STEP = 0.45;
+  function intervalMidis(): [number, number] | null {
+    const a = nameToMidi(intervalNameA());
+    const b = nameToMidi(intervalNameB());
+    return a >= 0 && b >= 0 ? [a, b] : null;
+  }
+
+  for (const select of [intervalNoteA, intervalOctaveA, intervalNoteB, intervalOctaveB]) {
+    select.addEventListener("change", updateInterval);
+  }
+  playUpButton.addEventListener("click", () => {
+    const midis = intervalMidis();
+    if (midis) void playArpeggioAsync([Math.min(...midis), Math.max(...midis)], INTERVAL_STEP);
+  });
+  playDownButton.addEventListener("click", () => {
+    const midis = intervalMidis();
+    if (midis) void playArpeggioAsync([Math.max(...midis), Math.min(...midis)], INTERVAL_STEP);
+  });
+  playTogetherButton.addEventListener("click", () => {
+    const midis = intervalMidis();
+    if (midis) void playNotesAsync(midis);
   });
   updateInterval();
 }
