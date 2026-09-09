@@ -223,13 +223,13 @@ button:focus-visible, label:focus-visible, input:focus-visible, select:focus-vis
 }
 
 /* —— 乐理页 —— */
-.theory-subnav {
+.theory-subnav, .practice-subnav {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 34px;
 }
-.theory-chip {
+.theory-chip, .practice-chip {
   padding: 7px 15px;
   border: 1px solid #2b4654;
   border-radius: 999px;
@@ -239,10 +239,10 @@ button:focus-visible, label:focus-visible, input:focus-visible, select:focus-vis
   font-size: 13px;
   transition: border-color .16s ease, color .16s ease, background .16s ease;
 }
-.theory-chip:hover { color: #c4d2d7; border-color: #497183; }
-.theory-chip.active { color: #06201d; border-color: var(--cyan); background: var(--cyan); font-weight: 600; }
+.theory-chip:hover, .practice-chip:hover { color: #c4d2d7; border-color: #497183; }
+.theory-chip.active, .practice-chip.active { color: #06201d; border-color: var(--cyan); background: var(--cyan); font-weight: 600; }
 
-.theory-subpage { animation: theory-fade .18s ease; }
+.theory-subpage, .practice-subpage { animation: theory-fade .18s ease; }
 @keyframes theory-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 .theory-section-title { margin: 34px 0 14px; color: var(--ink); font-family: "IBM Plex Sans SC", sans-serif; font-size: 16px; font-weight: 500; }
@@ -272,6 +272,21 @@ button:focus-visible, label:focus-visible, input:focus-visible, select:focus-vis
 .theory-chord-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .theory-chord-card { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid #203440; border-radius: 10px; color: var(--ink); background: var(--panel); cursor: pointer; text-align: left; transition: border-color .16s ease, background .16s ease; }
 .theory-chord-card:hover { border-color: #497183; background: #11232f; }
+
+/* —— 练习页 —— */
+.practice-shell { margin-bottom: clamp(28px, 5vw, 48px); }
+.practice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 14px; }
+.practice-title { margin-right: auto; overflow: hidden; color: var(--ink); font-family: "IBM Plex Sans SC", sans-serif; font-size: 15px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.practice-progress { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.practice-start { flex: 0 0 auto; }
+.practice-hint { display: flex; align-items: center; min-height: 36px; padding: 8px 14px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: rgba(12, 25, 36, .8); font-size: 13px; transition: border-color .16s ease, color .16s ease; }
+.practice-hint.waiting { border-color: rgba(255, 189, 102, .55); color: var(--amber); }
+.practice-hint.done { border-color: rgba(78, 225, 208, .55); color: var(--cyan); }
+.practice-stage { border: 1px solid #1f3440; border-radius: 14px; overflow: hidden; background: #08131d; }
+.practice-stage canvas { display: block; width: 100%; height: clamp(320px, 48vh, 460px); touch-action: none; }
+.practice-empty, .practice-placeholder { display: grid; gap: 14px; justify-items: start; padding: 26px 24px; border: 1px dashed #2b4654; border-radius: 14px; background: var(--panel); }
+.practice-empty p, .practice-placeholder p { margin: 0; color: var(--muted); font-size: 14px; }
+.practice-placeholder em { color: #6f858f; font-size: 12px; font-style: normal; }
 .chord-roman { color: var(--muted); font-size: 11px; }
 .chord-symbol { font-size: 16px; font-weight: 600; }
 

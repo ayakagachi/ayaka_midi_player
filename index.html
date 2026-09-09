@@ -120,13 +120,26 @@
         <div class="page-intro">
           <p>练习</p>
           <h1>把难的地方，慢慢弹会</h1>
-          <span>练习功能将围绕当前曲目逐步加入。</span>
+          <span>等待模式：瀑布流走到音符处会停下，弹对了才继续。</span>
         </div>
-        <div class="feature-list" aria-label="计划中的练习功能">
-          <div class="feature-row"><strong>A–B 片段循环</strong><span>选定一段反复练习，并逐轮提升速度。</span><em>下一阶段</em></div>
-          <div class="feature-row"><strong>等待模式</strong><span>弹对当前音符后，乐曲才继续向前。</span><em>下一阶段</em></div>
-          <div class="feature-row"><strong>左右手拆分</strong><span>单独练习任一只手，再合手演奏。</span><em>规划中</em></div>
-          <div class="feature-row"><strong>节奏反馈</strong><span>记录错音、漏音和提前或延后的音符。</span><em>规划中</em></div>
+        <nav class="practice-subnav" aria-label="练习子页" role="tablist">
+          <button class="practice-chip active" type="button" role="tab" aria-selected="true" aria-controls="practice-wait" data-practice-page="wait">等待练习</button>
+          <button class="practice-chip" type="button" role="tab" aria-selected="false" aria-controls="practice-loop" data-practice-page="loop">A–B 片段循环</button>
+          <button class="practice-chip" type="button" role="tab" aria-selected="false" aria-controls="practice-hands" data-practice-page="hands">左右手拆分</button>
+          <button class="practice-chip" type="button" role="tab" aria-selected="false" aria-controls="practice-rhythm" data-practice-page="rhythm">节奏反馈</button>
+        </nav>
+
+        <div class="practice-subpage" id="practice-wait" data-practice-panel="wait" role="tabpanel">
+          <div class="practice-shell" id="practiceShell"></div>
+        </div>
+        <div class="practice-subpage" id="practice-loop" data-practice-panel="loop" role="tabpanel" hidden>
+          <div class="practice-placeholder"><p>选定一段反复练习，并逐轮提升速度。</p><em>下一阶段</em></div>
+        </div>
+        <div class="practice-subpage" id="practice-hands" data-practice-panel="hands" role="tabpanel" hidden>
+          <div class="practice-placeholder"><p>单独练习任一只手，再合手演奏。</p><em>规划中</em></div>
+        </div>
+        <div class="practice-subpage" id="practice-rhythm" data-practice-panel="rhythm" role="tabpanel" hidden>
+          <div class="practice-placeholder"><p>记录错音、漏音和提前或延后的音符。</p><em>规划中</em></div>
         </div>
       </section>
 

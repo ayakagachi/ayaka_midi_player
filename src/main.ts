@@ -6,6 +6,8 @@ import { SAMPLED_INSTRUMENTS, SAMPLE_BASE_URL, samplerUrls, type SampledInstrume
 import { analyzeChords, analyzeKeyFromChords, findSegmentAt, transposedKeyLabel, type AnalysisResult } from "./analysis";
 import { NOTE_MIN, NOTE_MAX, isBlack, midiName, noteGeometry, whiteKeyMetrics } from "./keyboard";
 import { initTheoryPage } from "./theoryPage";
+import { emitNoteInput } from "./noteInput";
+import { initPracticePage, type PracticePageHandle } from "./practicePage";
 import "./style.css";
 
 type PianoNote = {
@@ -276,6 +278,7 @@ let activeMidiInputId: string | null = null;
 let nextVisualNoteIndex = 0;
 let lastVisualTime = 0;
 let lastFrameTime = performance.now();
+let practicePage: PracticePageHandle | null = null;
 const activeNotes = new Map<number, number>();
 const particles: Particle[] = [];
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -291,6 +294,7 @@ function activatePage(pageName: string) {
   });
   if (activePage === "studio") requestAnimationFrame(resizeCanvas);
   if (activePage === "library" && config.saveToLibrary) void refreshLibrary(true);
+  practicePage?.setActive(activePage === "practice");
 }
 
 function openPage(pageName: string) {
@@ -886,6 +890,7 @@ function unloadSong() {
 
   if (transposeTag.isConnected) transposeTag.remove();
   libraryCurrent.hidden = true;
+  practicePage?.notifySongChanged();
   void refreshLibrary();
 }
 
@@ -971,6 +976,7 @@ async function loadMidi(file: File, displayName?: string) {
     timeline.disabled = !notes.length;
     unloadSongButton.hidden = false;
     if (!notes.length) songMeta.textContent = "这个文件中没有可播放的钢琴音符";
+    practicePage?.notifySongChanged();
     openPage("studio");
   } catch (error) {
     console.error(error);
@@ -991,9 +997,11 @@ function handleMidiMessage(event: MIDIMessageEvent) {
     emptyState.classList.add("hidden");
     velocityLegend.hidden = false;
     emitParticles(note, normalizedVelocity);
+    emitNoteInput({ type: "on", midi: note, velocity: normalizedVelocity });
   } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
     activeEngine.triggerRelease(midiName(note));
     activeNotes.delete(note);
+    emitNoteInput({ type: "off", midi: note, velocity: 0 });
   }
 }
 
@@ -1221,6 +1229,21 @@ populateEngineOptions();
 syncEngine();
 refreshSettings();
 initTheoryPage({ output: masterBus, pianoSampler: () => getSampler("piano") });
+practicePage = initPracticePage({
+  getSong: () => notes.length ? { notes, duration, title: songTitle.textContent || "当前曲目" } : null,
+  getTranspose: () => transpose,
+  ensureStudioPaused: () => pausePlayback(),
+  previewNote: (midi, velocity, on) => {
+    if (on) {
+      void Tone.start();
+      activeEngine.triggerAttack(midiName(midi), Tone.now(), velocity);
+    } else {
+      activeEngine.triggerRelease(midiName(midi));
+    }
+  },
+});
+// 首次 activatePage 先于练习页初始化执行，按当前 hash 补一次激活状态
+practicePage.setActive(window.location.hash.slice(1) === "practice");
 void library.restore().then(() => {
   refreshSettings();
   void refreshLibrary();
