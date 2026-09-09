@@ -11,6 +11,15 @@ export function pitchClassName(pc: number, flats = false): string {
   return (flats ? NOTE_NAMES_FLAT : NOTE_NAMES_SHARP)[n];
 }
 
+/** 展示用双拼写：黑键音级同时标「升/降」两种（升号在前），如 "G♯/A♭"；白键原样 */
+export function pitchClassDisplay(pc: number): string {
+  const n = ((pc % 12) + 12) % 12;
+  const sharp = NOTE_NAMES_SHARP[n];
+  const flat = NOTE_NAMES_FLAT[n];
+  if (sharp === flat) return sharp;
+  return `${sharp.replace("#", "♯")}/${flat.replace("b", "♭")}`;
+}
+
 export function midiToName(midi: number, flats = false): string {
   return `${pitchClassName(midi, flats)}${Math.floor(midi / 12) - 1}`;
 }

@@ -13,7 +13,7 @@ import {
   intervalBetween,
   intervalsToSteps,
   nameToMidi,
-  pitchClassName,
+  pitchClassDisplay,
   scaleNotes,
   type ChordQuality,
   type CircleKey,
@@ -29,7 +29,13 @@ export interface TheoryHost {
 
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
 const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
-const NOTE_OPTIONS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+// 根音下拉等处的 12 音级显示名：黑键双拼写（升号在前），如 "C♯/D♭"
+const NOTE_OPTIONS = Array.from({ length: 12 }, (_, pc) => pitchClassDisplay(pc));
+
+// 小调名双拼写："D♯m/E♭m"
+function minorDisplay(pc: number): string {
+  return pitchClassDisplay(pc).split("/").map(name => `${name}m`).join("/");
+}
 
 // —— 模块级状态（initTheoryPage 仅调用一次）——
 let synth: Tone.PolySynth<Tone.Synth>;
@@ -283,13 +289,13 @@ function applyScaleRoot(root: number) {
 }
 
 function scaleLabel(): string {
-  return `${pitchClassName(scaleState.root, scaleState.flats)} ${scaleState.kindLabel}`;
+  return `${pitchClassDisplay(scaleState.root)} ${scaleState.kindLabel}`;
 }
 
 function syncScaleUI() {
   const label = scaleLabel();
   const noteList = scaleNotes(scaleState.root, scaleState.intervals)
-    .map(pc => pitchClassName(pc, scaleState.flats)).join(" ");
+    .map(pc => pitchClassDisplay(pc)).join(" ");
   if (scalesLabel) scalesLabel.textContent = label;
   if (scalesDetail) scalesDetail.textContent = `${noteList} · ${intervalsToSteps(scaleState.intervals)}`;
   if (chordsScaleLabel) chordsScaleLabel.textContent = label;
@@ -319,24 +325,28 @@ function renderCircle() {
   }
   const selected = CIRCLE_OF_FIFTHS.find(key => (mode === "major" ? key.majorPc : key.minorPc) === tonic);
   if (!selected) return;
-  circleCenterMajor.textContent = mode === "major" ? selected.majorName : selected.minorName;
-  circleCenterMinor.textContent = mode === "major" ? `关系小调 ${selected.minorName}` : `关系大调 ${selected.majorName}`;
+  const majorDisp = pitchClassDisplay(selected.majorPc);
+  const minorDisp = minorDisplay(selected.minorPc);
+  circleCenterMajor.textContent = mode === "major" ? majorDisp : minorDisp;
+  circleCenterMinor.textContent = mode === "major" ? `关系小调 ${minorDisp}` : `关系大调 ${majorDisp}`;
   circleCenterAcc.textContent = accidentalLabel(selected.accidental);
-  circleReadout.textContent = `${mode === "major" ? selected.majorName : selected.minorName} ${mode === "major" ? "大调" : "小调"} · ${accidentalLabel(selected.accidental)}`;
+  circleReadout.textContent = `${mode === "major" ? majorDisp : minorDisp} ${mode === "major" ? "大调" : "小调"} · ${accidentalLabel(selected.accidental)}`;
 }
 
 function buildCircle(container: HTMLElement) {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", "0 0 480 480");
+  svg.setAttribute("viewBox", "0 0 720 720");
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", "五度圈，顺时针五度上行加升号，逆时针五度下行加降号");
   svg.classList.add("circle-svg");
-  const c = 240;
-  const majorR = 166;   // 大调文字环
-  const minorR = 116;   // 小调文字环
-  const centerR = 84;   // 中心信息圆
-  const arrowR = 216;   // 方向箭头弧
+  // viewBox 720 与 CSS 显示宽度 1:1，字号即真实像素，放大圈不放大字
+  const c = 360;
+  const majorR = 258;   // 大调文字环
+  const minorR = 180;   // 小调文字环
+  const centerR = 110;  // 中心信息圆
+  const arrowR = 322;   // 方向箭头弧
+  const splitR = 220;   // 大小调分隔环（刻度点所在）
 
   const ring = (r: number, cls: string) => {
     const circ = document.createElementNS(NS, "circle");
@@ -347,16 +357,16 @@ function buildCircle(container: HTMLElement) {
     circ.setAttribute("class", cls);
     svg.appendChild(circ);
   };
-  ring(196, "circle-ring");
-  ring(140, "circle-ring circle-ring-soft");
+  ring(300, "circle-ring");
+  ring(splitR, "circle-ring circle-ring-soft");
   ring(centerR, "circle-center");
 
   // 每个五度位置在大小调分隔环上点一个刻度点
   CIRCLE_OF_FIFTHS.forEach(key => {
     const angle = (-90 + key.index * 30) * Math.PI / 180;
     const dot = document.createElementNS(NS, "circle");
-    dot.setAttribute("cx", String(c + Math.cos(angle) * 140));
-    dot.setAttribute("cy", String(c + Math.sin(angle) * 140));
+    dot.setAttribute("cx", String(c + Math.cos(angle) * splitR));
+    dot.setAttribute("cy", String(c + Math.sin(angle) * splitR));
     dot.setAttribute("r", "1.6");
     dot.setAttribute("class", "circle-tick");
     svg.appendChild(dot);
@@ -427,12 +437,12 @@ function buildCircle(container: HTMLElement) {
     const majorGlow = document.createElementNS(NS, "circle");
     majorGlow.setAttribute("cx", String(ox));
     majorGlow.setAttribute("cy", String(oy));
-    majorGlow.setAttribute("r", "25");
+    majorGlow.setAttribute("r", "32");
     majorGlow.setAttribute("class", "circle-glow");
     const majorHit = document.createElementNS(NS, "circle");
     majorHit.setAttribute("cx", String(ox));
     majorHit.setAttribute("cy", String(oy));
-    majorHit.setAttribute("r", "28");
+    majorHit.setAttribute("r", "38");
     majorHit.setAttribute("fill", "transparent");
     majorHit.setAttribute("class", "circle-hit");
     const majorText = document.createElementNS(NS, "text");
@@ -440,7 +450,7 @@ function buildCircle(container: HTMLElement) {
     majorText.setAttribute("y", String(oy + 4));
     majorText.setAttribute("text-anchor", "middle");
     majorText.setAttribute("class", "circle-text circle-major");
-    majorText.textContent = key.majorName;
+    majorText.textContent = pitchClassDisplay(key.majorPc);
     const accText = document.createElementNS(NS, "text");
     accText.setAttribute("x", String(ox));
     accText.setAttribute("y", String(oy + 19));
@@ -454,12 +464,12 @@ function buildCircle(container: HTMLElement) {
     const minorGlow = document.createElementNS(NS, "circle");
     minorGlow.setAttribute("cx", String(ix));
     minorGlow.setAttribute("cy", String(iy));
-    minorGlow.setAttribute("r", "19");
+    minorGlow.setAttribute("r", "25");
     minorGlow.setAttribute("class", "circle-glow");
     const minorHit = document.createElementNS(NS, "circle");
     minorHit.setAttribute("cx", String(ix));
     minorHit.setAttribute("cy", String(iy));
-    minorHit.setAttribute("r", "24");
+    minorHit.setAttribute("r", "30");
     minorHit.setAttribute("fill", "transparent");
     minorHit.setAttribute("class", "circle-hit");
     const minorText = document.createElementNS(NS, "text");
@@ -467,7 +477,7 @@ function buildCircle(container: HTMLElement) {
     minorText.setAttribute("y", String(iy + 5));
     minorText.setAttribute("text-anchor", "middle");
     minorText.setAttribute("class", "circle-text circle-minor");
-    minorText.textContent = key.minorName;
+    minorText.textContent = minorDisplay(key.minorPc);
     minorG.append(minorGlow, minorHit, minorText);
 
     majorG.style.cursor = "pointer";
@@ -601,7 +611,7 @@ function renderDiatonicGrid() {
     card.type = "button";
     card.append(
       el("span", "chord-roman", chord.roman),
-      el("span", "chord-symbol", `${chord.rootName}${chord.suffix}`),
+      el("span", "chord-symbol", `${pitchClassDisplay(chord.rootPc)}${chord.suffix}`),
     );
     card.addEventListener("click", () => {
       const midis = chordMidiNotes(chord.rootPc, chord.intervals, 4);
@@ -615,8 +625,8 @@ function renderDiatonicGrid() {
 function applyChordTeach(autoPlay: boolean) {
   const quality = chordTeach.quality;
   const midis = chordMidiNotes(chordTeach.rootPc, quality.intervals, 4);
-  const notes = midis.map(midi => pitchClassName(midi)).join(" ");
-  chordLabel.textContent = `${pitchClassName(chordTeach.rootPc)} ${quality.nameZh}：${notes}`;
+  const notes = midis.map(midi => pitchClassDisplay(midi)).join(" ");
+  chordLabel.textContent = `${pitchClassDisplay(chordTeach.rootPc)} ${quality.nameZh}：${notes}`;
   highlightChordKeyboard(midis);
   if (autoPlay) void playNotesAsync(midis);
 }
